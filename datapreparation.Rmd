@@ -1,19 +1,28 @@
 ---
 title: "R Notebook"
+author: "Iryna Popovych, Sofiya Hevorhyan"
+date: 'April 2019'
 output: html_notebook
 ---
 
 
 ```{r}
-startup <- read.csv(file="CAX_Startup_Data.csv", header=TRUE,as.is=T)
+startup <- read.csv(file="./data/CAX_Startup_Data.csv", header=TRUE,as.is=T)
 head(startup)
+c(sort(unique(startup[, 2])), class(startup[,2]))
+c(c(1, 6, 7), c(50:116))
+# no 1 (company name), 6 (company description), 7(industry of company)
+sapply(startup[, -c(1:49)], function(x) c(sort(unique(x)), "class", class(x)))
 ```
-We can see that some missing values are represented as "No Info" or are just "blanks". So, the first step is to replace "No Info" and "blanks" with "NA" to get better sense of missing values in data. 
+
+We can see that some missing values are represented as “No Info” or are just “blanks”. So, the first step is to replace “No Info” and “blanks” with “NA” to get better sense of missing values in data. 
+
 ```{r}
 startup[startup=="No Info"]<- NA 
 startup[startup==""]<- NA 
 startup[startup=="unknown amount"]<- NA 
 ```
+Now let's do some general data convertations.
 
 Now we convert character dates to respective data type:
 ```{r}
@@ -21,7 +30,7 @@ startup$Est..Founding.Date <- as.Date(startup$Est..Founding.Date, "%m/%d/%Y")
 startup$Last.Funding.Date <- as.Date(startup$Last.Funding.Date, "%m/%d/%Y")
 ```
 
-Now we need to convertcolumns with nibmbers to numeric data type:
+Now we need to convert columns with nibmbers to numeric data type:
 
 ```{r}
 col<- c(3:5,10,11,18:23,25,61,66,68:70,72,74,88,92,94:96,98,99,102:116) 
@@ -33,4 +42,46 @@ for(i in col)
   }
 
 ```
+
+For modelling, we need relevant data with not much missing values. Let's take a look on how they are distributred here:
+```{r}
+
+# Percent missing value for each variable
+mis_val<-sapply(startup, function(x) sum(is.na(x)))
+percent_mis<-as.data.frame(round((mis_val/nrow(startup))*100,1))
+
+name<-row.names(percent_mis)
+pcnt_mis_var<-cbind(name,percent_mis)
+row.names(pcnt_mis_var)<-NULL
+colnames(pcnt_mis_var)<-c("variable","Percent.Missing")
+```
+
+Any variable missing more than 50% should not be used in modeling as it can give false impression of relationship with dependent and can pollute the model. Being on conservative side generally we prefer to keep variable with less than 40% missing value only for treatment and anything above 40% missing values are to be used in testing only to give additional insights. 
+
+```{r}
+# keeping only variables with less than 40% missing
+new_var<-as.character(pcnt_mis_var$variable[which(pcnt_mis_var$Percent.Missing<40)])
+new_startup<-startup[new_var]
+
+# separate data frame for more than 40% missing
+other_var<-as.character(pcnt_mis_var$variable[which(pcnt_mis_var$Percent.Missing>=40)])
+other_data<-startup[other_var]
+```
+We have seoarated 3 variables which are not suitable for further modelling.
+```{r}
+length(other_var)
+length(new_var)
+```
+It would be better if we separate out the numeric and character variables from data frame. It would help in performing operations going forward. 
+
+```{r}
+# Separate data frame for numeric variables
+cnt_df<-new_startup[,c(3:5,10,12:14,17:22,24,60,65,67:69,71,73,85,89,91:93, 95,96,99:113)]
+
+# separate data frame for character variables
+cnt_var<-colnames(cnt_df)
+var <- colnames(new_startup) %in% cnt_var 
+char_df <- new_startup[!var]
+```
+
 
