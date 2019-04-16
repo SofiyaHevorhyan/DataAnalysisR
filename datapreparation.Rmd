@@ -1,0 +1,36 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+startup <- read.csv(file="CAX_Startup_Data.csv", header=TRUE,as.is=T)
+head(startup)
+```
+We can see that some missing values are represented as "No Info" or are just "blanks". So, the first step is to replace "No Info" and "blanks" with "NA" to get better sense of missing values in data. 
+```{r}
+startup[startup=="No Info"]<- NA 
+startup[startup==""]<- NA 
+startup[startup=="unknown amount"]<- NA 
+```
+
+Now we convert character dates to respective data type:
+```{r}
+startup$Est..Founding.Date <- as.Date(startup$Est..Founding.Date, "%m/%d/%Y") 
+startup$Last.Funding.Date <- as.Date(startup$Last.Funding.Date, "%m/%d/%Y")
+```
+
+Now we need to convertcolumns with nibmbers to numeric data type:
+
+```{r}
+col<- c(3:5,10,11,18:23,25,61,66,68:70,72,74,88,92,94:96,98,99,102:116) 
+
+# using for loop to convert column as numeric
+for(i in col)
+  {
+   startup[,i]<-as.numeric(startup[,i])
+  }
+
+```
+
