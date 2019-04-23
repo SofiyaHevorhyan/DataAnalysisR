@@ -230,7 +230,7 @@ var <- colnames(new_startup) %in% cnt_var
 char_df <- new_startup[!var]
 ```
 
-## INDIVIDUAL VARIABLES AND OUTLIERS
+## INDIVIDUAL VARIABLES - OUTLIERS
 
 We need to remove ouliers or to subtract them with other values.
 
@@ -266,6 +266,25 @@ for (n in colnames(cnt_df)){
   }
 }
 
+```
+
+## INDIVIDUAL VARIABLES - MISSING VALUES TREATMENT
+
+As we can see, every variable in our dataset has NA's.
+
+```{r}
+sapply(cnt_df, function(x) sum(is.na(x))) 
+```
+Now we need to go back to the rows of the dataframe and impute missing values using K-nearest-neighbours algorithm. k-Nearest Neighbour Imputation is based on a variation of the Gower Distance for numerical, categorical, ordered and semi-continous variables.
+
+```{r}
+library('VIM')
+cnt <- kNN(cnt_df,cat.var = 1:ncol(data), imp_var = F)
+```
+No missing values, only some missing dates left alive:
+
+```{r}
+sapply(cnt, function(x) sum(is.na(x)))
 ```
 
 Take a look on quantiles again, some of the upper quantiles, like 'Team.size.all.employees' have changed significatly, from 5000 to 110, or 'Last.Funding.Amount' from 7.7e+07 to 1.4e+07  - our job with ouliers is done!
