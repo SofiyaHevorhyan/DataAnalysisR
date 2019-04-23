@@ -4,43 +4,185 @@ author: "Iryna Popovych, Sofiya Hevorhyan"
 date: 'April 2019'
 output: html_notebook
 ---
+<style type="text/css">
 
+body{ /* Normal  */
+  font-size: 14px;
+  color: Black;
+  font-family: "Times New Roman", Times, serif;
+  }
+td {  /* Table  */
+  font-size: 8px;
+}
+h1.title {
+  font-size: 34px;
+  color: DarkBlue;
 
+}
+
+h1 { /* Header 1 */
+  font-size: 28px;
+  color: Black;
+}
+
+h2 { /* Header 2 */
+    font-size: 22px;
+  font-family: "Times New Roman", Times, serif;
+  color: Black;
+}
+h3 { /* Header 3 */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: Black;
+}
+code.r{ /* Code block */
+    font-size: 10px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 14px;
+}
+</style>
+## 1
+### The idea of the structure of the data 
 ```{r}
+library('stringr')
+
 startup <- read.csv(file="./data/CAX_Startup_Data.csv", header=TRUE,as.is=T)
 head(startup)
-c(sort(unique(startup[, 2])), class(startup[,2]))
-c(c(1, 6, 7), c(50:116))
-# no 1 (company name), 6 (company description), 7(industry of company)
-sapply(startup[, -c(1:49)], function(x) c(sort(unique(x)), "class", class(x)))
 ```
+### Finding the unique values
+```{r}
+# c(sort(unique(startup[, 2])), class(startup[,2]))
+# head(names(startup))
+# c(c(1, 6, 7), c(50:116))
+# # no 1 (company name), 6 (company description), 7(industry of company)
+# sapply(startup[, -c(1:49)], function(x) c(sort(unique(x)), "class", class(x)))
+```
+### Functions for cleaning
+```{r}
 
-We can see that some missing values are represented as “No Info” or are just “blanks”. So, the first step is to replace “No Info” and “blanks” with “NA” to get better sense of missing values in data. 
+my.col.change.as.factor <- function(startup, col.name) {
+  print(col.name)
+  startup[,col.name] <- trimws(tolower(startup[,col.name]))
+  vars <- unique(startup[,col.name])
+  print(vars)
+  print(length(vars))
+  if (length(vars) == 2 || sum(is.na(vars)) == 1) {
+    startup[,col.name] <- as.factor(startup[,col.name])
+    print(is.factor(startup[,col.name]))
+    print(sum(is.na(startup[,col.name])))
+    return(startup)
+  }
+}
+
+```
+### Replacing common unknowns
+
+We can see that some missing values are represented as “No Info” or are just “blanks”. So, the first step is to replace “No Info” and “blanks” with “NA” to get better sense of missing values in data.
+However, it doesn't mean that there are no others nontypical strings in other columns. We will check this later
 
 ```{r}
 startup[startup=="No Info"]<- NA 
 startup[startup==""]<- NA 
 startup[startup=="unknown amount"]<- NA 
 ```
-Now let's do some general data convertations.
 
-Now we convert character dates to respective data type:
+### Retyping and renaming. Data convertation
 ```{r}
-startup$Est..Founding.Date <- as.Date(startup$Est..Founding.Date, "%m/%d/%Y") 
-startup$Last.Funding.Date <- as.Date(startup$Last.Funding.Date, "%m/%d/%Y")
+#create a df for type representation
+# df.types <- data.frame(colid=numeric(),
+#                        colname=character(),
+#                        num_unique=numeric(),
+#                        v_unique=character(),
+#                        numNA=numeric())
+names(df.types)
+
+#Changing company_name (id) representation
+names(startup)[1] <- "id"
+startup$id <- as.numeric(str_replace(startup$id, 
+                                     pattern="Company",
+                                     replacement = ""))
+
+#names
+names(startup) <- tolower(names(startup))
+my.names <- names(startup)
+"add to df type"
+
+#Changing dependent company status
+startup <- my.col.change.as.factor(startup, my.names[2])
+"add to df type"
 ```
 
-Now we need to convert columns with nibmbers to numeric data type:
 
+Now, instead of doing all these transformation by hand, let's just try to automate this process.
+After analyzing variables in this data, we consider 4 types of features that belong to class 'character'
+1) the string itself (e.g 'description'), that should be so (deal with strings later)
+2) the string that should be converted to 2- or multi-stage factor (e.g. company status which is 2-stage)
+3) the string that should be converted to numetic data type (e.g. year of founding)
+4) the string that should be converted to date
+
+### Retyping to Date
 ```{r}
-col<- c(3:5,10,11,18:23,25,61,66,68:70,72,74,88,92,94:96,98,99,102:116) 
+date.col <- c(13, 14)
+startup$est..founding.date <- as.Date(startup$est..founding.date, "%m/%d/%Y") 
+startup$last.funding.date <- as.Date(startup$last.funding.date, "%m/%d/%Y")
+```
 
-# using for loop to convert column as numeric
-for(i in col)
+### Retyping col with numbers to numeric data type
+As we can see, there are no warnings, so, all the data is in rows are numbers
+```{r}
+num.col<- c(3:5,
+        10:11, 15,
+        18:23,25,61,66,
+        68:70,72,74,88,92,
+        94:96,98,99,102:116) 
+
+for(i in num.col)
   {
-   startup[,i]<-as.numeric(startup[,i])
-  }
+   startup[,i]<-round(as.numeric(startup[,i]), 4)
+}
+```
+### Retyping col to two-stage factor
+Get all the columns that are supposed to have only 2 types of answers (Y/N questions mostly)
+```{r}
+two.fact.col <- c(2, 12, 24, 27, 29:32,
+                  34, 36, 38, 40:42, 44:53,
+                  55, 58, 63:64, 77:78, 81:86, 89:91)
 
+for(i in two.fact.col)
+  {
+   startup <- my.col.change.as.factor(startup, my.names[i])
+}
+```
+### Retyping col to multi-stage factor
+```{r}
+multi.fact.col <- c(26, 28, 33, 35, 37, 39, 43, 54, 56,
+                    57, 59, 60, 65, 67, 71, 73, 75, 76,
+                    79, 80, 87, 93, 97, 100, 101)
+# 35, 37, 
+col.name <- 101
+for(i in multi.fact.col)
+  {
+  f(my.names[i])
+}
+f <- function(col.name){
+  col <- trimws(tolower(startup[,col.name]))
+  vars <- unique(col)
+  print(vars)
+  print(length(vars))
+}
+
+startup[,35] <- str_replace(startup[,35],
+                            pattern="no",
+                            replacement=NA)
+startup[,37] <- str_replace(startup[,37],
+                            pattern="no",
+                            replacement=NA)
+```
+### Dealing with string
+```{r}
+head(startup$has.the.team.size.grown)
+char.col <- c(6:9, 16:17, 62)
 ```
 
 For modelling, we need relevant data with not much missing values. Let's take a look on how they are distributred here:
