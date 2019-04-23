@@ -212,7 +212,11 @@ other_data<-startup[other_var]
 We have seoarated 3 variables which are not suitable for further modelling.
 ```{r}
 length(other_var)
-length(new_var)
+```
+Let's look how we reduced number of incomplete cases (rows which have missing values):
+```{r}
+
+sum(!complete.cases(startup)) - sum(!complete.cases(new_startup))
 ```
 It would be better if we separate out the numeric and character variables from data frame. It would help in performing operations going forward. 
 
@@ -226,4 +230,47 @@ var <- colnames(new_startup) %in% cnt_var
 char_df <- new_startup[!var]
 ```
 
+## INDIVIDUAL VARIABLES AND OUTLIERS
+
+We need to remove ouliers or to subtract them with other values.
+
+```{r}
+library('matrixStats')
+
+class(cnt_df$Team.size.all.employees)
+
+colQuantiles(data.matrix(cnt_df), probs = seq(0, 1, by= 0.2), na.rm = TRUE)
+```
+We create a function that replaces outliers with NA's using interquartile range. Outliers here are defined as observations that fall below Q1 − 1.5 IQR or above Q3 + 1.5 IQR.
+
+```{r}
+remove_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
+  H <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  return(y)
+}
+```
+Now we loop through all the columns witth numeric entries and eliminate ouliers using our function:
+
+```{r}
+for (n in colnames(cnt_df)){
+  if (class(cnt_df[,n][1]) != "Date"){
+     col <- cnt_df[,n]
+     summary(col)
+     col <- remove_outliers(col)
+     summary(col)
+     cnt_df[,n] <- col
+  }
+}
+
+```
+
+Take a look on quantiles again, some of the upper quantiles, like 'Team.size.all.employees' have changed significatly, from 5000 to 110, or 'Last.Funding.Amount' from 7.7e+07 to 1.4e+07  - our job with ouliers is done!
+
+```{r}
+colQuantiles(data.matrix(cnt_df), probs = seq(0, 1, by= 0.2), na.rm = TRUE)
+```
 
