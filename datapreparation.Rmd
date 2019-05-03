@@ -270,7 +270,10 @@ for (n in colnames(cnt_df)){
      cnt_df[,n] <- col
   }
 }
-
+```
+Take a look on quantiles again, some of the upper quantiles, like 'Team.size.all.employees' have changed significatly, from 5000 to 110, or 'Last.Funding.Amount' from 7.7e+07 to 1.4e+07  - our job with ouliers is done!
+```{r}
+colQuantiles(data.matrix(cnt_df), probs = seq(0, 1, by= 0.2), na.rm = TRUE)
 ```
 ## INDIVIDUAL VARIABLES - MISSING VALUES TREATMENT
 
@@ -280,13 +283,16 @@ As we can see, every variable in our dataset has NA's.
 sapply(cnt_df, function(x) sum(is.na(x))) 
 ```
 Now we need to go back to the rows of the dataframe and impute missing values using K-nearest-neighbours algorithm. k-Nearest Neighbour Imputation is based on a variation of the Gower Distance for numerical, categorical, ordered and semi-continous variables.
-
 ```{r}
 library('VIM')
-cnt <- kNN(cnt_df,cat.var = 1:ncol(data), imp_var = F)
-```
-No missing values, only some missing dates left alive:
+library('zoo')
 
+cnt_df[, 'Est..Founding.Date'] <- na.approx(cnt_df$Est..Founding.Date, na.rm = FALSE)
+cnt_df[, 'Last.Funding.Date '] <- na.approx(cnt_df$Last.Funding.Date, na.rm = FALSE)
+
+cnt <- kNN(cnt_df, k =10, imp_var = F)
+```
+No missing values, only missing dates left alive:
 ```{r}
 sapply(cnt, function(x) sum(is.na(x)))
 ```
