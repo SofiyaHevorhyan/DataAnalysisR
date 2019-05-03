@@ -7,70 +7,50 @@ output: html_notebook
 <style type="text/css">
 
 body{ /* Normal  */
-  font-size: 14px;
-  color: Black;
+  font-size: 16px;
+  color: black;
   font-family: "Times New Roman", Times, serif;
+  background-image: url(https://png.pngtree.com/thumb_back/fw800/back_pic/04/21/71/295830892804e4c.jpg);
+  background-position: center center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   }
-td {  /* Table  */
-  font-size: 8px;
-}
 h1.title {
   font-size: 34px;
-  color: DarkBlue;
-
+  color: DarkRed;
 }
-
 h1 { /* Header 1 */
   font-size: 28px;
-  color: Black;
+  color: black;
 }
-
 h2 { /* Header 2 */
     font-size: 22px;
   font-family: "Times New Roman", Times, serif;
-  color: Black;
+  color: darkpurple;
 }
 h3 { /* Header 3 */
   font-size: 18px;
   font-family: "Times New Roman", Times, serif;
-  color: Black;
-}
-code.r{ /* Code block */
-    font-size: 10px;
-}
-pre { /* Code block - determines code spacing between lines */
-    font-size: 14px;
+  color: darkblue;
 }
 </style>
-## 1
+
+## 1 Dealing with data
 ### The idea of the structure of the data 
 ```{r}
 library('stringr')
-
 startup <- read.csv(file="./data/CAX_Startup_Data.csv", header=TRUE,as.is=T)
 head(startup)
-```
-### Finding the unique values
-```{r}
-# c(sort(unique(startup[, 2])), class(startup[,2]))
-# head(names(startup))
-# c(c(1, 6, 7), c(50:116))
-# # no 1 (company name), 6 (company description), 7(industry of company)
-# sapply(startup[, -c(1:49)], function(x) c(sort(unique(x)), "class", class(x)))
 ```
 ### Functions for cleaning
 ```{r}
 
 my.col.change.as.factor <- function(startup, col.name) {
-  print(col.name)
   startup[,col.name] <- trimws(tolower(startup[,col.name]))
   vars <- unique(startup[,col.name])
-  print(vars)
-  print(length(vars))
   if (length(vars) == 2 || sum(is.na(vars)) == 1) {
     startup[,col.name] <- as.factor(startup[,col.name])
-    print(is.factor(startup[,col.name]))
-    print(sum(is.na(startup[,col.name])))
     return(startup)
   }
 }
@@ -89,14 +69,6 @@ startup[startup=="unknown amount"]<- NA
 
 ### Retyping and renaming. Data convertation
 ```{r}
-#create a df for type representation
-# df.types <- data.frame(colid=numeric(),
-#                        colname=character(),
-#                        num_unique=numeric(),
-#                        v_unique=character(),
-#                        numNA=numeric())
-names(df.types)
-
 #Changing company_name (id) representation
 names(startup)[1] <- "id"
 startup$id <- as.numeric(str_replace(startup$id, 
@@ -106,11 +78,9 @@ startup$id <- as.numeric(str_replace(startup$id,
 #names
 names(startup) <- tolower(names(startup))
 my.names <- names(startup)
-"add to df type"
 
 #Changing dependent company status
 startup <- my.col.change.as.factor(startup, my.names[2])
-"add to df type"
 ```
 
 
@@ -124,6 +94,8 @@ After analyzing variables in this data, we consider 4 types of features that bel
 ### Retyping to Date
 ```{r}
 date.col <- c(13, 14)
+date.col.names <- my.names[date.col]
+
 startup$est..founding.date <- as.Date(startup$est..founding.date, "%m/%d/%Y") 
 startup$last.funding.date <- as.Date(startup$last.funding.date, "%m/%d/%Y")
 ```
@@ -131,11 +103,9 @@ startup$last.funding.date <- as.Date(startup$last.funding.date, "%m/%d/%Y")
 ### Retyping col with numbers to numeric data type
 As we can see, there are no warnings, so, all the data is in rows are numbers
 ```{r}
-num.col<- c(3:5,
-        10:11, 15,
-        18:23,25,61,66,
-        68:70,72,74,88,92,
-        94:96,98,99,102:116) 
+num.col<- c(3:5, 10:11,15,
+            18:23,25,61,66,68:70,72,74,88,92,94:96,98,99,102:116) 
+num.col.names <- my.names[num.col]
 
 for(i in num.col)
   {
@@ -156,38 +126,74 @@ for(i in two.fact.col)
 ```
 ### Retyping col to multi-stage factor
 ```{r}
+# comment to 35 and 37
+startup[,37] <- str_replace(startup[,37],
+                            pattern="not applicable",
+                            replacement="no")
+
 multi.fact.col <- c(26, 28, 33, 35, 37, 39, 43, 54, 56,
                     57, 59, 60, 65, 67, 71, 73, 75, 76,
                     79, 80, 87, 93, 97, 100, 101)
-# 35, 37, 
-col.name <- 101
-for(i in multi.fact.col)
-  {
-  f(my.names[i])
-}
-f <- function(col.name){
-  col <- trimws(tolower(startup[,col.name]))
-  vars <- unique(col)
-  print(vars)
-  print(length(vars))
+ordered.levels <- c(26, 28, 43, 56, 57, 59, 67, 71, 73, 75,76, 79, 80, 87, 93)
+
+my.replace <- function(startup, col.name, patt, replac) {
+  startup[,col.name] <- str_replace(startup[,col.name], 
+                                      pattern=patt,
+                                      replacement = replac)
+  return(startup)
 }
 
-startup[,35] <- str_replace(startup[,35],
-                            pattern="no",
-                            replacement=NA)
-startup[,37] <- str_replace(startup[,37],
-                            pattern="no",
-                            replacement=NA)
+change.as.multi.factor <- function(startup, col.name) {
+  startup[,col.name] <- trimws(tolower(startup[,col.name]))
+  
+  
+  if (col.name %in% ordered.levels) {
+    startup <- my.replace(startup, col.name, "nothing", "none")
+    startup <- my.replace(startup, col.name, "small", "low")
+    startup <- my.replace(startup, col.name, "large", "high")
+    #little trick
+    startup <- my.replace(startup, col.name, "average", "close_average")
+  }
+  
+  
+  vars <- unique(startup[,col.name])
+  startup[,col.name] <- as.factor(startup[,col.name])
+  col.levels <- levels(startup[, col.name])
+  if (length(col.levels) == 3 && ("few" %in% col.levels)) {
+    col.levels <- c("none", "few", "many")
+  } else if (length(col.levels) == 3 && "low" %in% col.levels) {
+    col.levels <- c("low", "medium", "high")
+  } else if (length(col.levels) == 4 && "low" %in% col.levels) {
+    col.levels <- c("none", "low", "medium", "high")
+  }
+  startup[,col.name] <- factor(startup[,col.name],
+                               levels = col.levels)
+  return(startup)
+}
+
+# done: sort order in factors
+for(i in multi.fact.col)
+  {
+  startup <- change.as.multi.factor(startup, i)
+  print(head(startup[,i]))
+}
+
+# todo: transform from factors to dummy
+# model1 <- lm(employee.count ~ dependent.company.status + number.of.investors.in.seed, data=startup)
+# library(caret)
+# startup[,2] <- predict(dummyVars(~ dependent.company.status, data = startup), newdata = startup)[,2]
+# model2 <- lm(employee.count ~ dependent.company.status + number.of.investors.in.seed, data=startup)
+# summary(model1)
+# summary(model2)
 ```
 ### Dealing with string
 ```{r}
-head(startup$has.the.team.size.grown)
 char.col <- c(6:9, 16:17, 62)
 ```
 
+### Missing values
 For modelling, we need relevant data with not much missing values. Let's take a look on how they are distributred here:
 ```{r}
-
 # Percent missing value for each variable
 mis_val<-sapply(startup, function(x) sum(is.na(x)))
 percent_mis<-as.data.frame(round((mis_val/nrow(startup))*100,1))
@@ -198,6 +204,7 @@ row.names(pcnt_mis_var)<-NULL
 colnames(pcnt_mis_var)<-c("variable","Percent.Missing")
 ```
 
+### Separating data
 Any variable missing more than 50% should not be used in modeling as it can give false impression of relationship with dependent and can pollute the model. Being on conservative side generally we prefer to keep variable with less than 40% missing value only for treatment and anything above 40% missing values are to be used in testing only to give additional insights. 
 
 ```{r}
@@ -214,16 +221,109 @@ We have seoarated 3 variables which are not suitable for further modelling.
 length(other_var)
 length(new_var)
 ```
+### Separate numerical and character data
 It would be better if we separate out the numeric and character variables from data frame. It would help in performing operations going forward. 
 
 ```{r}
 # Separate data frame for numeric variables
-cnt_df<-new_startup[,c(3:5,10,12:14,17:22,24,60,65,67:69,71,73,85,89,91:93, 95,96,99:113)]
+cnt_var <- c(num.col.names, date.col.names)
+cnt_var <- cnt_var[!cnt_var %in% other_var]
+cnt_df<-new_startup[cnt_var]
 
 # separate data frame for character variables
-cnt_var<-colnames(cnt_df)
 var <- colnames(new_startup) %in% cnt_var 
 char_df <- new_startup[!var]
 ```
 
+## 2 Feature creation
+```{r}
+# change scale to log
+cnt_df$last.funding.amount <- log(cnt_df$last.funding.amount)
 
+# Create additional features like counting number of investors for company
+char_df$investor.count<-length(strsplit(char_df$investors, "|",fixed=T))
+for (i in (1:length(char_df$investors))) {
+  if(is.na(char_df$investors[i])==T){
+    char_df$investor.count[i]<- NA}
+  else{
+    lst<-strsplit(char_df$investors[i], "|", fixed=T)
+    char_df$investor.count[i]<-length(lst[[1]])
+  }
+}
+
+# lastfunding.amount vs. age of company ration
+cnt_df$funging.agecomp.ratio <-
+  cnt_df$last.funding.amount/cnt_df$age.of.company.in.years
+```
+
+### PCA
+```{r}
+new <- cnt_df[-c(42, 43, 45)]
+new[is.na(new)] <- 0.01
+startup_pca <- prcomp(new, scale.=T, center=T)
+startup_pca$sdev
+startup_pca$rotation
+plot(startup_pca, type="l")
+summary(startup_pca)
+
+
+# library(devtools)
+# install_github("ggbiplot", "vqv")
+#  
+# library(ggbiplot)
+# g <- ggbiplot(ir.pca, obs.scale = 1, var.scale = 1, 
+#               groups = ir.species, ellipse = TRUE, 
+#               circle = TRUE)
+# g <- g + scale_color_discrete(name = '')
+# g <- g + theme(legend.direction = 'horizontal', 
+#                legend.position = 'top')
+# print(g)
+```
+
+## 3 Graphics
+```{r}
+library(ggplot2)
+
+# boxplot of employee count
+boxplot(cnt_df$employee.count, main="box plot of employee count",
+        ylab="Employee count")
+
+# histogram with black outline, white fill and median line
+ggplot(cnt_df, aes(x=employee.count))+
+  geom_histogram(binwidth=5, colour="black", fill="white")+
+  geom_vline(aes(xintercept=median(employee.count, na.rm=T)),
+             color="red", linetype="dashed", size=1)+
+  ggtitle("Histogram of Employee count")+
+  xlab("Employee Count") +
+  ylab("Frequency")+
+  theme_light()
+
+# adding dependent variable to numeric data frame
+cnt_df$dependent.company.status<-char_df$dependent.company.status
+
+# box plot to see difference in mean of team size w.r.t two categories of dependent
+ggplot(cnt_df, aes(x=dependent.company.status,y=team.size.all.employees,
+                   fill=dependent.company.status)) +
+  geom_boxplot()
+
+# data preparation for bar chart
+avg_emp<-aggregate(as.numeric(cnt_df$team.size.all.employees), 
+                   by=list(as.factor(cnt_df$dependent.company.status)),
+                   FUN=mean, na.rm=TRUE)
+colnames(avg_emp)<-c("company.status","avg.employee.size")
+
+# bar chart to check for difference in mean
+ggplot(avg_emp, aes(x = company.status, y = avg.employee.size)) +
+  geom_bar(stat = "identity")
+```
+
+## 4 Statistical tests
+```{r}
+# t-test for checking difference in mean
+t.test(team.size.all.employees~dependent.company.status, data=cnt_df)
+
+# tabulating data for chi-sq test
+tab<- table(char_df$dependent.company.status,char_df$local.or.global.player)
+# chi-sq test for categorical variable
+chisq.test(tab)
+```
