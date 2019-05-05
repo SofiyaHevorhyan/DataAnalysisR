@@ -56,8 +56,10 @@ head(startup)
 ```
 ### Functions for cleaning
 ```{r}
+# function for transforming character col -> two-stage factor col
 my.col.change.as.factor <- function(dataframe, col.name) {
-  dataframe[,col.name] <- trimws(tolower(dataframe[,col.name])) # change all column names to lowercase
+  # change all data in col to lowecase, without blank spaces
+  dataframe[,col.name] <- trimws(tolower(dataframe[,col.name])) 
   vars <- unique(dataframe[,col.name])
   if (length(vars) == 2 || sum(is.na(vars)) == 1) {
     dataframe[,col.name] <- as.factor(dataframe[,col.name])
@@ -67,7 +69,7 @@ my.col.change.as.factor <- function(dataframe, col.name) {
 ```
 ### Replacing common unknowns
 We can see that some missing values are represented as "No Info" or are just "blanks". So, the first step is to replace "No Info" and "blanks" with "NA" to get better sense of missing values in data.
-However, it doesn't mean that there are no others nontypical strings in other columns. We will check this later
+However, it doesn't mean that there are no others nontypical strings in other columns. We will check this later by unique() function
 ```{r}
 startup[startup=="No Info"]<- NA 
 startup[startup==""]<- NA 
@@ -90,11 +92,11 @@ my.names <- names(startup)
 #Changing dependent company status
 startup <- my.col.change.as.factor(startup, my.names[2])
 ```
-Now, instead of doing all these transformation by hand, let's just try to automate this process.
+Now, instead of doing all these transformations by hand, let's just try to automate this process.
 After analyzing variables in this data, we consider 4 types of features that belong to class 'character'
-1) the string itself (e.g 'description'), that should be so (deal with strings later)
+1) the string itself (e.g 'description'), that should remain so 
 2) the string that should be converted to 2- or multi-stage factor (e.g. company status which is 2-stage)
-3) the string that should be converted to numetic data type (e.g. year of founding)
+3) the string that should be converted to numeric data type (e.g. year of founding)
 4) the string that should be converted to date
 ```{r}
 date.col <- c(13, 14)
@@ -127,21 +129,32 @@ for(i in two.fact.col)
 ```
 ### Retyping col to multi-stage factor
 ```{r}
-# comment to 35 and 37
+# in col 37 there is some inconstistency in data representation
+# basically both "not applicable" and "no" mean the same, so we just replace it
 startup[,37] <- str_replace(startup[,37],
                             pattern="not applicable",
                             replacement="no")
 multi.fact.col <- c(26, 28, 33, 35, 37, 39, 43, 54, 56,
                     57, 59, 60, 65, 67, 71, 73, 75, 76,
                     79, 80, 87, 93, 97, 100, 101)
+
+# some of the multi-stage factors should be strongly ordered
 ordered.levels <- c(26, 28, 43, 56, 57, 59, 67, 71, 73, 75,76, 79, 80, 87, 93)
+
 my.replace <- function(startup, col.name, patt, replac) {
   startup[,col.name] <- str_replace(startup[,col.name], 
                                       pattern=patt,
                                       replacement = replac)
   return(startup)
 }
+
 change.as.multi.factor <- function(startup, col.name) {
+  "
+  to lower different types of multi-stage factor (which we later should reorder) some of them are changed (small to low, etc.) to make reordering easier
+  1) type: none, few, mane
+  2) type: low, medium, high
+  3) type: none, low, medium, high
+  "
   startup[,col.name] <- trimws(tolower(startup[,col.name]))
   
   
@@ -149,7 +162,7 @@ change.as.multi.factor <- function(startup, col.name) {
     startup <- my.replace(startup, col.name, "nothing", "none")
     startup <- my.replace(startup, col.name, "small", "low")
     startup <- my.replace(startup, col.name, "large", "high")
-    #little trick
+    #little trick, by renaming only this phrase, the col now is right-ordered
     startup <- my.replace(startup, col.name, "average", "close_average")
   }
   
@@ -168,12 +181,12 @@ change.as.multi.factor <- function(startup, col.name) {
                                levels = col.levels)
   return(startup)
 }
-# done: sort order in factors
+
 for(i in multi.fact.col)
   {
   startup <- change.as.multi.factor(startup, i)
-  #print(head(startup[,i]))
 }
+
 # todo: transform from factors to dummy
 # model1 <- lm(employee.count ~ dependent.company.status + number.of.investors.in.seed, data=startup)
 # library(caret)
@@ -181,10 +194,8 @@ for(i in multi.fact.col)
 # model2 <- lm(employee.count ~ dependent.company.status + number.of.investors.in.seed, data=startup)
 # summary(model1)
 # summary(model2)
-```
-### Dealing with string
-```{r}
-char.col <- c(6:9, 16:17, 62) #save text columns separately
+#save text columns separately, now only these col are characters
+char.col <- c(6:9, 16:17, 62) 
 ```
 ### Missing values
 For modelling, we need relevant data with not much missing values. Let's take a look on how they are distributred here:
@@ -214,7 +225,7 @@ new_startup<-startup[new_var]
 other_var<-as.character(pcnt_mis_var$variable[which(pcnt_mis_var$Percent.Missing>=40)])
 other_data<-startup[other_var]
 ```
-We have seoarated 3 variables which are not suitable for further modelling.
+We have separated 3 variables which are not suitable for further modelling.
 ```{r}
 length(other_var)
 ```
@@ -223,7 +234,7 @@ Let's look how we reduced number of incomplete cases (rows which have missing va
 sum(!complete.cases(startup)) - sum(!complete.cases(new_startup))
 ```
 ### Separate numerical and character data
-It would be better if we separate out the numeric and character variables from data frame. It would help in performing operations going forward. 
+It would be better if we separate out the numeric and character/factor variables from data frame. It would help in performing operations going forward. 
 ```{r}
 # Separate data frame for numeric variables
 cnt_var <- c(num.col.names, date.col.names)
@@ -232,6 +243,7 @@ cnt_df<-new_startup[cnt_var]
 # separate data frame for character variables
 var <- colnames(new_startup) %in% cnt_var 
 char_df <- new_startup[!var]
+char_var <- names(char_df)
 ```
 ## Individual variables. Treating outliers
 We need to remove ouliers or to subtract them with other values.
@@ -241,7 +253,7 @@ library('matrixStats')
 colquant <- as.data.frame(colQuantiles(data.matrix(cnt_df), probs = seq(0, 1, by= 0.1), na.rm = TRUE))
 colquant
 ```
-We create a function that replaces outliers with NA's using interquartile range rule. Outliers here are defined as observations that fall below Q1 ??? 1.5IQR or above Q3 + 1.5IQR.
+We create a function that replaces outliers with NA's using interquartile range rule. Outliers here are defined as observations that fall below Q1 - 1.5IQR or above Q3 + 1.5IQR.
 ```{r}
 remove_outliers <- function(x, na.rm = TRUE, ...) {
   qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
@@ -299,7 +311,7 @@ We filled all the gaps! (EXCEPT DATES)
 missing <- as.data.frame(sapply(cnt_df, function(x) sum(is.na(x))))
 missing
 ```
-## 2 Feature creation
+## Feature creation
 From now on, we work with cnt_df table with clean and imputed data, with no outliers.
 ```{r}
 # change scale to log
@@ -315,37 +327,17 @@ for (i in (1:length(char_df$investors))) {
     char_df$investor.count[i]<-length(lst[[1]])
   }
 }
+# renew names of char_df
+char_var <- names(char_df)
 
 # lastfunding.amount vs. age of company ration
-cnt_df$funging.agecomp.ratio <-
+cnt_df$funding.agecomp.ratio <-
   cnt_df$last.funding.amount/cnt_df$age.of.company.in.years
+# renew names of cnt_df
+cnt_var <- names(cnt_df)
 ```
-### PCA
-```{r}
-new <- cnt_df[-c(42, 43, 45)]
-new[is.na(new)] <- 0.01
-startup_pca <- prcomp(new, scale.=T, center=T)
-startup_pca$sdev
-startup_pca$rotation
-plot(startup_pca, type="l")
-summary(startup_pca)
-# library(devtools)
-# install_github("ggbiplot", "vqv")
-#  
-# library(ggbiplot)
-# g <- ggbiplot(ir.pca, obs.scale = 1, var.scale = 1, 
-#               groups = ir.species, ellipse = TRUE, 
-#               circle = TRUE)
-# g <- g + scale_color_discrete(name = '')
-# g <- g + theme(legend.direction = 'horizontal', 
-#                legend.position = 'top')
-# print(g)
-```
-
-PCA (I) -- Iryna
-
-
-We decided to perform PCA to see what are the principal components. However, the dataset is too wide to provide good and valuable results whhich describe high percent of population variance. After dozens of failed attempts, we decided to perform PCA on small part of our data, in particular, just column characteristics that describe different skills percentage for founders and co-founders of startups.
+### PCA 
+We decided to perform PCA to see what are the principal components. However, the dataset is too wide to provide good and valuable results which describe high percent of population variance. After dozens of failed attempts, we decided to perform PCA on small part of our data, in particular, just column characteristics that describe different skills percentage for founders and co-founders of startups.
 ```{r}
 #head(cnt_df)
 
@@ -357,9 +349,9 @@ summary(cnt.pca)
 ```
 From the summary we can see that the first principal component is srill not very descriptive, because it describes only 28% of data variace. We can see that there are no clear groupd from the vizualization below, too:
 ```{r}
-#install.packages('scales')
-#library(devtools)
-#install_github("vqv/ggbiplot")
+# install.packages('scales')
+# library(devtools) 
+# install_github("vqv/ggbiplot")
 
 library(ggbiplot)
 
@@ -367,19 +359,14 @@ ggbiplot(cnt.pca)
 ```
 PCA came out to be not very applicable in our case. After all, we tried to do ot and learned some new stuff while trying to do this.
 
-## Random Forest for defining importance of variables
-
-```{r}
-
-```
-
-## 3 Graphics
-
+## Graphics #1
 ```{r}
 library(ggplot2)
+
 # boxplot of employee count
 boxplot(cnt_df$employee.count, main="box plot of employee count",
         ylab="Employee count")
+
 # histogram with black outline, white fill and median line
 ggplot(cnt_df, aes(x=employee.count))+
   geom_histogram(binwidth=5, colour="black", fill="white")+
@@ -389,21 +376,78 @@ ggplot(cnt_df, aes(x=employee.count))+
   xlab("Employee Count") +
   ylab("Frequency")+
   theme_light()
+```
+## Graphics #2
+```{r}
 # adding dependent variable to numeric data frame
-cnt_df$dependent.company.status<-char_df$dependent.company.status
+cnt_df$dependent.company.status <-char_df$dependent.company.status
+
 # box plot to see difference in mean of team size w.r.t two categories of dependent
 ggplot(cnt_df, aes(x=dependent.company.status,y=team.size.all.employees,
                    fill=dependent.company.status)) +
   geom_boxplot()
+
 # data preparation for bar chart
-avg_emp<-aggregate(as.numeric(cnt_df$team.size.all.employees), 
-                   by=list(as.factor(cnt_df$dependent.company.status)),
+avg_emp<-aggregate(cnt_df$team.size.all.employees, 
+                   by=list(cnt_df$dependent.company.status),
                    FUN=mean, na.rm=TRUE)
 colnames(avg_emp)<-c("company.status","avg.employee.size")
+
 # bar chart to check for difference in mean
 ggplot(avg_emp, aes(x = company.status, y = avg.employee.size)) +
   geom_bar(stat = "identity")
 ```
+## Graphics #3
+```{r}
+ggplot(cnt_df, aes(x=cnt_df$last.funding.amount)) + 
+  geom_histogram(aes(fill=..count..), binwidth = 0.7) +
+  scale_x_continuous(name="last funding amount, log",
+                     breaks=seq(9, 17, by=1)) +
+  scale_y_continuous(name="number of startups") +
+  ggtitle("Distribution of last funding amount") +
+  theme_bw() +
+  geom_vline(xintercept = mean(cnt_df$last.funding.amount), size = 1,
+             colour = "#FF3721",
+             linetype = "dashed")
+
+ggplot(cnt_df, aes(x = number.of.investors.in.seed,
+                   fill=cnt_df$dependent.company.status)) +
+  geom_histogram(aes(y=..count..), binwidth=1,
+                 position="identity", alpha=0.5) +
+  scale_x_continuous(name = "number of investors in seed") +
+  scale_y_continuous(name = "number of startup") +
+  ggtitle("Distribution of num of investors in seed with respect to success") +
+  theme_bw() +
+  scale_fill_brewer(palette="Pastel1")
+```
+## Graphics #4
+```{r}
+ggplot(cnt_df, aes(x=percent_skill_data.science)) +
+  geom_histogram(fill="yellowgreen", color="yellow4",binwidth = 1.5) +
+  facet_grid(dependent.company.status ~ .)+
+  ggtitle("Data science skills influence on success")
+```
+## Variable Importance. Random Forest
+Now, we are trying to take closer look at our numerical data to understand which of the variables are the most important
+```{r}
+cnt_df$dependent.company.status <- as.numeric(cnt_df$dependent.company.status)+1
+
+library(caret)
+glm_model <- glm(formula = dependent.company.status ~ ., data = cnt_df)
+importance1 <- varImp(glm_model)
+
+library(randomForest)
+rf_model = randomForest(dependent.company.status~., data=cnt_df[,-c(42,43)])
+# Create an importance based on mean decreasing gini
+importance2 <- importance(rf_model)
+
+#ranks features, the bigger oberall, the more var is important
+head(importance1)
+head(importance2)
+# open in large window
+varImpPlot(rf_model)
+```
+
 ## 4 Statistical tests
 ```{r}
 # t-test for checking difference in mean
@@ -412,4 +456,25 @@ t.test(team.size.all.employees~dependent.company.status, data=cnt_df)
 tab<- table(char_df$dependent.company.status,char_df$local.or.global.player)
 # chi-sq test for categorical variable
 chisq.test(tab)
+
+# todo: F-tests
+```
+### Variable Selection
+
+```{r}
+#library(devtools)
+#install_github("tomasgreif/woe")
+# library(woe)
+# 
+# # only dependent and independent variable of training set
+# # should be there in data frame
+# train_new$CAX_ID<-NULL
+# # calculation of information value
+# IV<-iv.mult(train_new,y="Dependent",TRUE)
+# # Ignore warnig message for variable which have 0 WOE
+# # (anyway you will remove these before modeling)
+
+```
+## Model Building
+```{r}
 ```

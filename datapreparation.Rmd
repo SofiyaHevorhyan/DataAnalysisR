@@ -41,6 +41,7 @@ h3 { /* Header 3 */
 ```{r}
 library('stringr')
 startup <- read.csv(file="./data/CAX_Startup_Data.csv", header=TRUE,as.is=T)
+startup2 <- read.csv(file="./data2/CAX_Startup_Test.csv", header=TRUE,as.is=T)
 head(startup)
 ```
 ### Functions for cleaning
@@ -173,7 +174,6 @@ change.as.multi.factor <- function(startup, col.name) {
 for(i in multi.fact.col)
   {
   startup <- change.as.multi.factor(startup, i)
-  print(head(startup[,i]))
 }
 
 # todo: transform from factors to dummy
@@ -242,7 +242,7 @@ We need to remove ouliers or to subtract them with other values.
 ```{r}
 library('matrixStats')
 
-class(cnt_df$Team.size.all.employees)
+class(cnt_df$team.size.all.employees)
 
 colQuantiles(data.matrix(cnt_df), probs = seq(0, 1, by= 0.2), na.rm = TRUE)
 ```
@@ -308,9 +308,9 @@ colQuantiles(data.matrix(cnt_df), probs = seq(0, 1, by= 0.2), na.rm = TRUE)
 cnt_df$last.funding.amount <- log(cnt_df$last.funding.amount)
 
 # Create additional features like counting number of investors for company
-char_df$investor.count<-length(strsplit(char_df$investors, "|",fixed=T))
+char_df$investor.count<-length(strsplit(char_df$investors, "|",fixed=TRUE))
 for (i in (1:length(char_df$investors))) {
-  if(is.na(char_df$investors[i])==T){
+  if(is.na(char_df$investors[i])==TRUE){
     char_df$investor.count[i]<- NA}
   else{
     lst<-strsplit(char_df$investors[i], "|", fixed=T)
@@ -323,31 +323,7 @@ cnt_df$funging.agecomp.ratio <-
   cnt_df$last.funding.amount/cnt_df$age.of.company.in.years
 ```
 
-### PCA
-```{r}
-new <- cnt_df[-c(42, 43, 45)]
-new[is.na(new)] <- 0.01
-startup_pca <- prcomp(new, scale.=T, center=T)
-startup_pca$sdev
-startup_pca$rotation
-plot(startup_pca, type="l")
-summary(startup_pca)
-
-
-# library(devtools)
-# install_github("ggbiplot", "vqv")
-#  
-# library(ggbiplot)
-# g <- ggbiplot(ir.pca, obs.scale = 1, var.scale = 1, 
-#               groups = ir.species, ellipse = TRUE, 
-#               circle = TRUE)
-# g <- g + scale_color_discrete(name = '')
-# g <- g + theme(legend.direction = 'horizontal', 
-#                legend.position = 'top')
-# print(g)
-```
-
-## 3 Graphics
+## Graphics #1
 ```{r}
 library(ggplot2)
 
@@ -364,7 +340,9 @@ ggplot(cnt_df, aes(x=employee.count))+
   xlab("Employee Count") +
   ylab("Frequency")+
   theme_light()
-
+```
+## Graphics #2
+```{r}
 # adding dependent variable to numeric data frame
 cnt_df$dependent.company.status<-char_df$dependent.company.status
 
@@ -374,8 +352,8 @@ ggplot(cnt_df, aes(x=dependent.company.status,y=team.size.all.employees,
   geom_boxplot()
 
 # data preparation for bar chart
-avg_emp<-aggregate(as.numeric(cnt_df$team.size.all.employees), 
-                   by=list(as.factor(cnt_df$dependent.company.status)),
+avg_emp<-aggregate(cnt_df$team.size.all.employees, 
+                   by=list(cnt_df$dependent.company.status),
                    FUN=mean, na.rm=TRUE)
 colnames(avg_emp)<-c("company.status","avg.employee.size")
 
@@ -383,8 +361,12 @@ colnames(avg_emp)<-c("company.status","avg.employee.size")
 ggplot(avg_emp, aes(x = company.status, y = avg.employee.size)) +
   geom_bar(stat = "identity")
 ```
+## Graphics #3
+```{r}
 
-## 4 Statistical tests
+```
+
+## Statistical tests
 ```{r}
 # t-test for checking difference in mean
 t.test(team.size.all.employees~dependent.company.status, data=cnt_df)
@@ -393,4 +375,34 @@ t.test(team.size.all.employees~dependent.company.status, data=cnt_df)
 tab<- table(char_df$dependent.company.status,char_df$local.or.global.player)
 # chi-sq test for categorical variable
 chisq.test(tab)
+
+# todo: F-test and more t-tests
+
 ```
+### LDA
+```{r}
+
+```
+### Variable Importance
+```{r}
+fit_glm <- glm(formula = dependent.company.status ~ ., data = cnt_df)
+
+library(caret)
+importance1 <- varImp(fit_glm)
+#ranks features, the bigger oberall, the more var is important
+head(importance1)
+
+library(randomForest)
+fit_rf = randomForest(dependent.company.status~., data=cnt_df)
+# Create an importance based on mean decreasing gini
+importance2 <- importance(fit_rf)
+head(importance2)
+
+# open in large window
+varImpPlot(fit_rf)
+```
+### Variable Selection
+
+```{r}
+```
+## Model Building
