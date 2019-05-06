@@ -54,7 +54,7 @@ Here we go!
 startup <- read.csv(file="./data/CAX_Startup_Data.csv", header=TRUE,as.is=TRUE)
 head(startup)
 ```
-### Functions for cleaning
+### Function for changing character to two-stage factor
 ```{r}
 # function for transforming character col -> two-stage factor col
 my.col.change.as.factor <- function(dataframe, col.name) {
@@ -103,6 +103,10 @@ date.col <- c(13, 14)
 date.col.names <- my.names[date.col]
 startup$est..founding.date <- as.Date(startup$est..founding.date, "%m/%d/%Y") 
 startup$last.funding.date <- as.Date(startup$last.funding.date, "%m/%d/%Y")
+
+# it's hard to get some use of the date type in out model
+# so we extract the year from our last.funding.date
+startup$last.funding.date <- as.numeric(format(startup$last.funding.date, '%Y'))
 ```
 ### Retyping col with numbers to numeric data type
 As we can see, there are no warnings, so, all the data is in rows are numbers
@@ -421,8 +425,8 @@ ggplot(cnt_df, aes(x=percent_skill_data.science)) +
   facet_grid(dependent.company.status ~ .)+
   ggtitle("Data science skills influence on success")
 ```
-## Variable Importance. Random Forest
-Now, we are trying to take closer look at our numerical data to understand which of the variables are the most important
+## Variable Selection. Random Forest
+Now, we are trying to take closer look at our numerical data to understand which of the variables are the most important. We use randomForest approach and caret varImp() function
 ```{r}
 cnt_df$dependent.company.status <- as.numeric(cnt_df$dependent.company.status)-1
 
@@ -441,9 +445,12 @@ head(importance2)
 # open in large window
 varImpPlot(rf_model)
 
-name_var <- rownames(importance1)[apply(importance1, 1, function(x) x > 2)]
-name_var <- c(name_var, rownames(importance2)[apply(importance2, 1, function(x) x > 2.75)])
-train1 <- cnt_df[, c(name_var, "dependent.company.status")]
+# select features for modeling
+name_var1 <- rownames(importance1)[apply(importance1, 1, function(x) x > 1.1)]
+name_var2 <- rownames(importance2)[apply(importance2, 1, function(x) x > 2)]
+mean(name_var1 != name_var2)
+train1 <- cnt_df[, c(name_var1, "dependent.company.status")]
+train2 <- cnt_df[, c(name_var2, "dependent.company.status")]
 ```
 
 ## Statistical tests
@@ -454,50 +461,52 @@ t.test(team.size.all.employees~dependent.company.status, data=cnt_df)
 tab<- table(char_df$dependent.company.status,char_df$local.or.global.player)
 # chi-sq test for categorical variable
 chisq.test(tab)
-
-# todo: F-tests
+# F-test
 ```
-## Variable Selection
+## Variable Importance
 
 ```{r}
 library(devtools)
 # install_github("tomasgreif/woe")
 # install_github("tomasgreif/riv")
 # install.packages("DBI",dependencies=TRUE)
+# library(riv)
 library(woe)
-library(riv)
 library(DBI)
+
 cnt_df$fail <- as.numeric(!cnt_df$dependent.company.status)
 # calculation of information value
 IV<-iv.mult(cnt_df[, -c(42, 43, 45)],y="fail",summary=TRUE)
 
 var<-IV[which(IV$InformationValue>0.1),]
-var1<-var[which(var$InformationValue<0.7),]
-final_var<-var1$Variable
-final_var
+var1<-var[which(var$InformationValue<0.5),]
+var3<-var1$Variable
+var3
 # for model using information value
-train<-cnt_df[, c(final_var, "dependent.company.status")]
+train3<-cnt_df[, c(var3, "dependent.company.status")]
 ```
 ## Model Building
 ```{r}
 # fitting stepwise binary logistic regression with logit link function
-mod<-step(glm(dependent.company.status~., 
-              family = binomial(link=logit),data = train))
-# model summary
-summary(mod)
-# final logistic regression model
-model<-glm(formula = dependent.company.status ~ team.size.senior.leadership +
-             percent_skill_data.science + number.of.investors.in.seed +
-             percent_skill_engineering + percent_skill_sales +
-             percent_skill_leadership + percent_skill_domain +
-             renown.score + number.of.co.founders + 
-             experience.in.fortune.500.organizations,
-           family = binomial(link = logit), data = train)
-# model summary
-summary(model)
-
+mod3<-step(glm(dependent.company.status~., 
+               family = binomial(link=logit),data = train3))
 
 mod1<-step(glm(dependent.company.status~., 
               family = binomial(link=logit),data = train1))
+
+mod2<-step(glm(dependent.company.status~., 
+              family = binomial(link=logit),data = train2))
+
 summary(mod1)
+summary(mod2)
+summary(mod3)
+# final logistic regression model
+model<-glm(formula = dependent.company.status ~ number.of.investors.in.seed +
+             team.size.senior.leadership + number.of.investors.in.seed + 
+             number.of.recognitions.for.founders.and.co.founders + percent_skill_data.science
+           + percent_skill_business.strategy + percent_skill_sales + last.funding.date +
+             internet.activity.score + employee.count,
+           family = binomial(link = logit), data = cnt_df)
+# model summary
+summary(model)
 ```
