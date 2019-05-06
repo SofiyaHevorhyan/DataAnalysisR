@@ -446,11 +446,14 @@ head(importance2)
 varImpPlot(rf_model)
 
 # select features for modeling
-name_var1 <- rownames(importance1)[apply(importance1, 1, function(x) x > 1.1)]
-name_var2 <- rownames(importance2)[apply(importance2, 1, function(x) x > 2)]
+name_var1 <- rownames(importance1)[apply(importance1, 1, function(x) x > 2)]
+name_var2 <- rownames(importance2)[apply(importance2, 1, function(x) x > 3)]
 mean(name_var1 != name_var2)
 train1 <- cnt_df[, c(name_var1, "dependent.company.status")]
 train2 <- cnt_df[, c(name_var2, "dependent.company.status")]
+
+name_var <- c(name_var1, name_var2)
+train.data <- cnt_df[, c(name_var, "dependent.company.status")]
 ```
 
 ## Statistical tests
@@ -461,7 +464,6 @@ t.test(team.size.all.employees~dependent.company.status, data=cnt_df)
 tab<- table(char_df$dependent.company.status,char_df$local.or.global.player)
 # chi-sq test for categorical variable
 chisq.test(tab)
-# F-test
 ```
 ## Variable Importance
 
@@ -488,25 +490,66 @@ train3<-cnt_df[, c(var3, "dependent.company.status")]
 ## Model Building
 ```{r}
 # fitting stepwise binary logistic regression with logit link function
-mod3<-step(glm(dependent.company.status~., 
-               family = binomial(link=logit),data = train3))
 
 mod1<-step(glm(dependent.company.status~., 
-              family = binomial(link=logit),data = train1))
+              family = binomial(link=logit),data = train.data))
 
 mod2<-step(glm(dependent.company.status~., 
-              family = binomial(link=logit),data = train2))
+               family = binomial(link=logit),data = train3))
 
 summary(mod1)
 summary(mod2)
-summary(mod3)
+
 # final logistic regression model
-model<-glm(formula = dependent.company.status ~ number.of.investors.in.seed +
-             team.size.senior.leadership + number.of.investors.in.seed + 
-             number.of.recognitions.for.founders.and.co.founders + percent_skill_data.science
-           + percent_skill_business.strategy + percent_skill_sales + last.funding.date +
-             internet.activity.score + employee.count,
+model<-glm(formula = dependent.company.status ~ 
+             number.of.investors.in.seed +
+             team.size.senior.leadership + 
+             number.of.investors.in.seed + 
+             number.of.recognitions.for.founders.and.co.founders + 
+             percent_skill_data.science + 
+             percent_skill_business.strategy + 
+             percent_skill_sales + 
+             last.funding.date +
+             internet.activity.score,
            family = binomial(link = logit), data = cnt_df)
+
 # model summary
 summary(model)
+```
+## Results
+### Confusion matrix
+```{r}
+library(caret)
+
+confusion.vs <- confusionMatrix(as.factor(round(mod1$fitted.values)),
+                                     as.factor(cnt_df$dependent.company.status))
+
+
+qplot(as.factor(cnt_df$dependent.company.status), 
+      as.factor(round(mod1$fitted.values)), 
+      colour= cnt_df$dependent.company.status, geom = c("boxplot", "jitter"), 
+      main = "predicted vs. observed using VS", 
+      xlab = "Observations", ylab = "Predictions") + 
+  scale_color_gradientn(colors = c("red", "black"))
+
+confusion.vi <- confusionMatrix(as.factor(round(mod2$fitted.values)),
+                                     as.factor(cnt_df$dependent.company.status))
+
+qplot(as.factor(cnt_df$dependent.company.status), 
+      as.factor(round(mod2$fitted.values)), 
+      colour= cnt_df$dependent.company.status, geom = c("boxplot", "jitter"), 
+      main = "predicted vs. observed using VI", 
+      xlab = "Observations", ylab = "Predictions") + 
+  scale_color_gradientn(colors = c("purple", "black"))
+
+
+confusion.vs
+confusion.vi
+
+```
+```{r}
+# model fit (Hosmer and Lemeshow goodness of fit (GOF) test)
+library(ResourceSelection)
+hoslem.test(cnt_df$dependent.company.status, mod1$fitted.values, g=10)
+hoslem.test(cnt_df$dependent.company.status, mod2$fitted.values, g=10)
 ```
