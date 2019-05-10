@@ -7,19 +7,97 @@ output: html_document
 
 
 ## Importing data and recording original variables
-
+### Read data
 ```{r}
 # importing train and test data
-train<- read.csv(file="./data/CAX_Startup_Train.csv", header=TRUE,as.is=T)
-test<- read.csv(file="./data/CAX_Startup_Test.csv", header=TRUE,as.is=T)
-train$Category<-c("Train")
-test$Category<-c("Test")
+train <- read.csv(file="./data/CAX_Startup_Train.csv", header=TRUE,as.is=T)
+test <- read.csv(file="./data/CAX_Startup_Test.csv", header=TRUE,as.is=T)
+train$Category <- c("Train")
+test$Category <- c("Test")
+
 # row binding imported train and test data
-d<-rbind(train,test)
+merged <- rbind(train,test)
+```
+
+### Exploring and retyping
+We can see that some variables in our data should be retyped. We divide all the independent variables in categories:
+1) numerical or integer class, as representation of numbers info, rounded to 4
+2) multi-stage factors, as categorical variable
+3) 1/0 integer vales as dummy variables
+4) CAX_id and dependent variable
+```{r}
+#sapply(merged, function(x) rbind(class(x), unique(x)))
+
+my.to.factor <- function(x) {
+  new.col <- as.factor(x)
+  return(new.col)
+}
+
+my.to.dummy <- function(x) {
+  x <- factor(x, levels=c("No", "Yes"))
+  x <- as.numeric(x)-1
+  return(x)
+}
+
+my.to.number <- function(x) {
+  new.column <- round(x, 4)
+  return(new.column)
+}
+
+my.retype.func <- function(merged) {
+  my.names <- names(merged)
+  my.cnt.names <- c()
+  my.fact.names <- c()
+  
+  # skip CAX_id and dependent var and Category
+  for (i in 3:ncol(merged)) {
+    col.class <- class(merged[, i])
+    col <- merged[, i]
+    
+    if (col.class == "numeric") {
+      merged[, i] <- my.to.number(col)
+      my.cnt.names <- c(my.cnt.names, my.names[i])
+      
+    } else if (col.class == "character" && unique(col) %in% c("No", "Yes")) {
+      merged[, i] <- my.to.dummy(col) 
+      my.cnt.names <- c(my.cnt.names, my.names[i])
+      
+    } else if (col.class == "character") {
+      merged[, i] <- my.to.factor(merged[, i])
+      my.fact.names <- c(my.fact.names, my.names[i])
+      
+    } else {
+      my.cnt.names <- c(my.cnt.names, my.names[i])
+    }
+  }
+  result <- list()
+  result$merged <- merged
+  result$my.names <- my.names
+  result$my.cnt.names <- my.cnt.names
+  result$my.fct.names <- my.fact.names
+  
+  return(result)
+}
+```
+
+```{r}
+# Note: now all variables are either factors or numbers (except cax_id, 1 col)
+# dependent variable is still of type numeric
+# names of factor/num col see in result$my.....
+result <- my.retype.func(merged)
+merged <- result$merged
+head(merged)
+my.names <- result$my.names
+
+# todo: what to do with categorical var? change to numbers or inlude in model as set of dummies
+# todo: remove idcompany from regressions!
+```
+
+```{r}
 # recoding ordinal variables
-library(plyr)
-d$employee_count_code<-as.numeric(revalue(d$Founders_previous_company_employee_count,
-c("Small"=1, "Medium"=2, "Large"=3)))
+# library(plyr)
+# merged$employee_count_code<-as.numeric(revalue(merged$Founders_previous_company_employee_count,
+# c("Small"=1, "Medium"=2, "Large"=3)))
 
 # recoding with R built-in functions, alternative
 # d$employee_count_code[d$Founders_previous_company_employee_count== "Small"] <- 1
@@ -27,32 +105,58 @@ c("Small"=1, "Medium"=2, "Large"=3)))
 # d$employee_count_code[d$Founders_previous_company_employee_count== "Large"] <- 3
 
 # removing original variable from data frame
-d$Founders_previous_company_employee_count = NULL
+# merged$Founders_previous_company_employee_count = NULL
 ```
 
 ## Making Your own test data
 
 ```{r}
-# partitioning of test and train set for own evaluation of models
-# seprating out 0 and 1 level
-train_0 <- train[train$Dependent==0,]
-train_1 <- train[train$Dependent==1,]
-train_0$Category<-NULL
-train_1$Category<-NULL
-# randomly choosing test and train set for each level
 library(caTools)
-sample_0 = sample.split(train_0, SplitRatio = .9)
-train_0_new = subset(train_0, sample_0 == TRUE)
-test_0_new = subset(train_0, sample_0 == FALSE)
-sample_1 = sample.split(train_1, SplitRatio = .9)
-train_1_new = subset(train_1, sample_1 == TRUE)
-test_1_new = subset(train_1, sample_1 == FALSE)
-# final new train and test set
-train_new<- rbind(train_1_new,train_0_new)
-test_new<- rbind(test_1_new,test_0_new)
+
+my.split <- function(merged) {
+  # for return
+  result <- list()
+  
+  train <- merged[merged$Category == "Train",]
+  test <- merged[merged$Category == "Test",]
+  train$Category <- NULL
+  test$Category <- NULL
+  
+  result$test <- test
+  result$train <- train
+  
+  # partitioning of test and train set for own evaluation of models
+  # seprating out 0 and 1 level
+  train_0 <- train[train$Dependent==0,]
+  train_1 <- train[train$Dependent==1,]
+  
+  # randomly choosing test and train set for each level
+  sample_0 = sample.split(train_0, SplitRatio = .9)
+  train_0_new = subset(train_0, sample_0 == TRUE)
+  test_0_new = subset(train_0, sample_0 == FALSE)
+
+  sample_1 = sample.split(train_1, SplitRatio = .9)
+  train_1_new = subset(train_1, sample_1 == TRUE)
+  test_1_new = subset(train_1, sample_1 == FALSE)
+  
+  # final new train and test set
+  result$train_new <- rbind(train_1_new,train_0_new)
+  result$test_new <- rbind(test_1_new,test_0_new)
+  
+  return(result)
+}
+
+splitted <- my.split(merged)
+test <- splitted$test
+train <- splitted$train
+train_new <- splitted$train_new
+test_new <- splitted$test_new
 ```
 
-## Variable selection using information value
+## Graphics
+
+## Variable selection 
+### using information value
 
 ```{r}
 # install developer tool and then woe package from gitub
@@ -61,10 +165,12 @@ test_new<- rbind(test_1_new,test_0_new)
 library(devtools)
 # install_github("tomasgreif/woe")
 library(woe)
-# only dependent and independent variable of training set
-# should be there in data frame
-train_new$CAX_ID<-NULL
+# only dependent and independent variables of training set should be there in data frame
+train_new$CAX_ID <- NULL
+
 # calculation of information value
+row.names(train_new) <- 1:nrow(train_new) 
+
 IV<-iv.mult(train_new,y="Dependent",TRUE)
 # Ignore warnig message for variable which have 0 WOE
 # (anyway you will remove these before modeling)
@@ -74,9 +180,23 @@ var<-IV[which(IV$InformationValue>0.1),]
 var1<-var[which(var$InformationValue<0.5),]
 final_var<-var1$Variable
 x_train<-train_new[final_var]
-Dependent<-train$Dependent
+Dependent<-train_new$Dependent
 train_final<-cbind(Dependent,x_train)
 ```
+
+## using randomForest
+
+
+## PCA
+
+
+## LDA
+
+
+## SSA
+
+
+
 
 ## Model Building
 
@@ -88,9 +208,9 @@ summary(mod)
 
 # final logistic regression model
 model<-glm(formula = Dependent ~ Company_competitor_count +
-Company_1st_investment_time + Founders_Data_Science_skills_score +
-Company_big_data + Founders_publications + Founders_global_exposure,
-family = binomial(link = logit), data = train_final)
+             Company_1st_investment_time + Founders_Data_Science_skills_score +
+             Company_big_data + Founders_publications + Founders_global_exposure,
+           family = binomial(link = logit), data = train_final)
 # model summary
 summary(model)
 
@@ -108,13 +228,13 @@ hoslem.test(train_new$Dependent,model$fitted.values, g=10)
 # Prediction on test set
 pred_prob<-predict (model, newdata=test_new, type="response")
 # model accuracy measures
-library (ROCR)
+library(ROCR)
 pred <- prediction (pred_prob, test_new$Dependent)
 # Area under the curve
-Performance (pred, 'auc')
+performance(pred, 'auc')
 # creating ROC curve
 roc <- performance (pred,"tpr","fpr")
-plot (roc)
+plot(roc)
 
 # create data frame of values
 perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
@@ -131,7 +251,7 @@ geom_line()+ theme_bw()
 
 # model accuracy - Confusion Matrix
 library(SDMTools)
-confusion.matrix (test_new$Dependent, pred_prob, threshold = 0.42)
+confusion.matrix(test_new$Dependent, pred_prob, threshold = 0.42)
 
 # Prediction on test set of CAX
 pred_CAX<- predict(model, newdata=test, type="response")
