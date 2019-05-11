@@ -49,7 +49,7 @@ my.retype.func <- function(merged) {
   my.cnt.names <- c()
   my.fact.names <- c()
   
-  # skip CAX_id and dependent var and Category
+  # skip CAX_id and dependent var
   for (i in 3:ncol(merged)) {
     col.class <- class(merged[, i])
     col <- merged[, i]
@@ -191,6 +191,17 @@ train_final<-cbind(Dependent,x_train)
 
 
 ## LDA
+```{r}
+data.lda <- cbind(train_new[, result$my.cnt.names], train_new$Dependent)
+
+library(devtools)
+install_github("Displayr/flipMultivariates")
+
+library(MASS)
+library(Dis)
+library(devtools)
+lda <- LDA(class ~ ., data = vehicles)
+```
 
 
 ## SSA
