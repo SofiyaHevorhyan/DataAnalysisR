@@ -185,6 +185,45 @@ train_final<-cbind(Dependent,x_train)
 ```
 
 ## using randomForest
+```{r}
+fit_glm=glm(Dependent~.,train_new,family = "binomial")
+ 
+# generate summary
+summary(fit_glm)
+# Using varImp() function
+library(caret)
+varImp(fit_glm)
+ 
+#Import the random forest library and fit a model
+library(randomForest)
+fit_rf=randomForest(Dependent~., data=train_new)
+# Create an importance based on mean decreasing gini
+importance(fit_rf)
+ 
+# compare the feature importance with varImp() function
+varImp(fit_rf)
+ 
+# Create a plot of importance scores by random forest
+varImpPlot(fit_rf)
+```
+
+## using Mars
+
+```{r}
+library(earth)
+mars.model <- earth(Dependent ~., data=train_new)
+ev <- evimp(mars.model)
+x <- ev
+
+# for this moment not in very appropriate form
+plot(x =ev,
+    cex.var = 1,
+    type.nsubsets = "l", col.nsubsets = "black", lty.nsubsets = 1,
+    type.gcv = "l", col.gcv = 2, lty.gcv = 1,
+    type.rss = "l", col.rss = "gray60", lty.rss = 1,
+    cex.legend = 1, x.legend = nrow(x), y.legend = x[1,"nsubsets"],
+    rh.col = 1, do.par = F)
+```
 
 
 ## PCA
@@ -192,15 +231,37 @@ train_final<-cbind(Dependent,x_train)
 
 ## LDA
 ```{r}
-data.lda <- cbind(train_new[, result$my.cnt.names], train_new$Dependent)
+data.train.lda <- cbind(train_new[, result$my.cnt.names], as.factor(train_new$Dependent))
+data.test.lda <- cbind(test_new[, result$my.cnt.names], as.factor(test_new$Dependent))
+names(data.train.lda)[38] <- "Dependent"
+names(data.test.lda)[38] <- "Dependent"
 
-library(devtools)
-install_github("Displayr/flipMultivariates")
+# install_github("Displayr/flipMultivariates")
+
+# library(flipMultivariates)
+# lda <- LDA(class ~ ., data = vehicles)
 
 library(MASS)
-library(Dis)
-library(devtools)
-lda <- LDA(class ~ ., data = vehicles)
+lda_model <- lda(Dependent ~., data=data.train.lda)
+# shows you the mean, used for LDA
+lda_model$means
+
+#Predictions on the test data
+lda_pred <- predict(object = lda_model, newdata = data.test.lda)
+lda_pred$class
+
+#confusion matrix for lda
+library(caret)
+confusion.m <- confusionMatrix(lda_pred$class,
+                               data.test.lda$Dependent)
+confusion.m
+
+qplot(data.test.lda$Dependent,
+      lda_pred$class,
+      colour= as.numeric(data.test.lda$Dependent), geom = c("boxplot", "jitter"), 
+      main = "predicted vs. observed using LDA", 
+      xlab = "Observations", ylab = "Predictions") + 
+  scale_color_gradientn(colors = c("red", "black"))
 ```
 
 
