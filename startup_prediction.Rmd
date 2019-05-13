@@ -2,12 +2,14 @@
 title: "Startup Prediction"
 author: "Iryna Popovych, Sofiya Hevorhyan"
 date: "April 2019"
-output: html_document
+output: html_notebook
 ---
 
+*This project is a second-year semester work on course "Linear Algebra". The aim of this research is to predict whether the startup will be successful or not with the highest accuracy, based on different criteria. Because of this purpose were used a couple of different methods for variable selection along with Principal Component Analysis and Linear Discriminant Analysis*
 
 ## Importing data and recording original variables
 ### Read data
+First of all, we have to read the data and store it in appropriate variables. There are also some further transformation with it, so we add column Category and merged dataset so we will not perform the same actions twice
 ```{r}
 # importing train and test data
 train <- read.csv(file="./data/CAX_Startup_Train.csv", header=TRUE,as.is=T)
@@ -20,14 +22,12 @@ merged <- rbind(train,test)
 ```
 
 ### Exploring and retyping
-We can see that some variables in our data should be retyped. We divide all the independent variables in categories:
+We can see that some variables in our data should be retyped. We divide all the variables in categories:
 1) numerical or integer class, as representation of numbers info, rounded to 4
 2) multi-stage factors, as categorical variable
 3) 1/0 integer vales as dummy variables
 4) CAX_id and dependent variable
 ```{r}
-#sapply(merged, function(x) rbind(class(x), unique(x)))
-
 my.to.factor <- function(x) {
   new.col <- as.factor(x)
   return(new.col)
@@ -79,7 +79,7 @@ my.retype.func <- function(merged) {
   return(result)
 }
 ```
-
+Retyping some of the variables by different functions
 ```{r}
 # Note: now all variables are either factors or numbers (except cax_id, 1 col)
 # dependent variable is still of type numeric
@@ -90,7 +90,6 @@ head(merged)
 my.names <- result$my.names
 
 # todo: what to do with categorical var? change to numbers or inlude in model as set of dummies
-# todo: remove idcompany from regressions!
 ```
 
 ```{r}
@@ -109,7 +108,7 @@ my.names <- result$my.names
 ```
 
 ## Making Your own test data
-
+To perform different analysis we have split our train data into two sets - train_new to train our models (using different methods) and to test them with test_new (as in original test we don't have real values of Dependent column)
 ```{r}
 library(caTools)
 
@@ -155,74 +154,91 @@ test_new <- splitted$test_new
 
 ## Graphics
 
-## Variable selection 
-### using information value
-
 ```{r}
-# install developer tool and then woe package from gitub
-# refer http://www.r-bloggers.com/r-credit-scoring-woe-information-value-in-woe-package/
+# todo: more graphics!!
+library(ggvis)
+
+# Iris scatter plot
+train %>% ggvis(~Company_senior_team_count, ~Founders_skills_score, fill = ~Dependent) %>% layer_points()
+```
+
+
+## Variable selection
+
+### using information value
+First, we try to select some important variables using information value method. We will remove CAX_id column so it will not influence our results as only dependent and independent variables should be included in data frame
+```{r}
 # install.packages("devtools")
 library(devtools)
 # install_github("tomasgreif/woe")
 library(woe)
-# only dependent and independent variables of training set should be there in data frame
+
 train_new$CAX_ID <- NULL
 
 # calculation of information value
 row.names(train_new) <- 1:nrow(train_new) 
+IV <- iv.mult(train_new,y="Dependent",TRUE)
 
-IV<-iv.mult(train_new,y="Dependent",TRUE)
-# Ignore warnig message for variable which have 0 WOE
-# (anyway you will remove these before modeling)
-
-# selecting variables with 0.1<IV<0.5
-var<-IV[which(IV$InformationValue>0.1),]
-var1<-var[which(var$InformationValue<0.5),]
-final_var<-var1$Variable
-x_train<-train_new[final_var]
-Dependent<-train_new$Dependent
-train_final<-cbind(Dependent,x_train)
+# selecting variables with 0.1 < IV < 0.5
+var1 <- IV[which(IV$InformationValue>0.1),]
+var1 <- c(var1, var1[which(var1$InformationValue<0.5),])
+x_train <- train_new[var1$Variable]
+Dependent <- train_new$Dependent
+# final df with important variables
+train1 <- cbind(Dependent,x_train)
 ```
 
-## using randomForest
+### using randomForest
+Another methods for variables selection are randomForest and variable importance from caret package
 ```{r}
-fit_glm=glm(Dependent~.,train_new,family = "binomial")
- 
 # generate summary
+fit_glm=glm(Dependent~.,train_new,family = "binomial")
 summary(fit_glm)
+
 # Using varImp() function
 library(caret)
-varImp(fit_glm)
+importance1 <- varImp(fit_glm)
  
 #Import the random forest library and fit a model
 library(randomForest)
 fit_rf=randomForest(Dependent~., data=train_new)
 # Create an importance based on mean decreasing gini
-importance(fit_rf)
- 
-# compare the feature importance with varImp() function
-varImp(fit_rf)
+importance2 <- importance(fit_rf)
  
 # Create a plot of importance scores by random forest
 varImpPlot(fit_rf)
+
+# select variables for second model
+# 2.5 as a key point before sharp decline (top-7 variables)
+var2 <- rownames(importance1)[which(importance1$Overall > 2.5)]
+var2[var2 == "Founders_publicationsNone"] <- "Founders_publications"
+var2[var2 == "Founder_educationMasters"] <- "Founder_education"
+var2 <- c(var2, rownames(importance2)[which(importance2 > 2.5)])
+# final df from rf
+train2 <- cbind(Dependent, train_new[,var2[!var2 %in% "Company_business_modelB2C"]])
 ```
 
-## using Mars
+### using Mars
 
 ```{r}
 library(earth)
 mars.model <- earth(Dependent ~., data=train_new)
 ev <- evimp(mars.model)
-x <- ev
 
 # for this moment not in very appropriate form
-plot(x =ev,
+plot(x=ev,
     cex.var = 1,
     type.nsubsets = "l", col.nsubsets = "black", lty.nsubsets = 1,
     type.gcv = "l", col.gcv = 2, lty.gcv = 1,
     type.rss = "l", col.rss = "gray60", lty.rss = 1,
-    cex.legend = 1, x.legend = nrow(x), y.legend = x[1,"nsubsets"],
+    cex.legend = 1, x.legend = nrow(ev), y.legend = ev[1,"nsubsets"],
     rh.col = 1, do.par = F)
+
+# todo: interpret results
+var3 <- rownames(ev)
+var3[var3 == "Company_business_modelB2C"] <- "Company_business_model"
+var3[var3 == "Founders_skills_score-unused"] <- "Founders_skills_score"
+train3 <- cbind(Dependent, train_new[, var3])
 ```
 
 
@@ -230,16 +246,12 @@ plot(x =ev,
 
 
 ## LDA
+Our next method for analyzing our data in Linear Discriminant Analysis. For this method we need only numeric or integer data types as independent variables and categorical as dependent
 ```{r}
 data.train.lda <- cbind(train_new[, result$my.cnt.names], as.factor(train_new$Dependent))
 data.test.lda <- cbind(test_new[, result$my.cnt.names], as.factor(test_new$Dependent))
 names(data.train.lda)[38] <- "Dependent"
 names(data.test.lda)[38] <- "Dependent"
-
-# install_github("Displayr/flipMultivariates")
-
-# library(flipMultivariates)
-# lda <- LDA(class ~ ., data = vehicles)
 
 library(MASS)
 lda_model <- lda(Dependent ~., data=data.train.lda)
@@ -265,27 +277,77 @@ qplot(data.test.lda$Dependent,
 ```
 
 
-## SSA
+## KNN
+```{r}
+# one way
+library(caret)
+model_knn <- train(train_new[, result$my.cnt.names], as.factor(train_new[, 1]), method='knn')
+predictions<-predict(object=model_knn,test_new[,result$my.cnt.names])
+
+# Evaluate the predictions
+table(predictions)
+
+# Confusion matrix 
+confusionMatrix(predictions,as.factor(test_new$Dependent))
 
 
+# takoe
+# sec way
+# Setting up train controls
+# repeats = 3
+# numbers = 10
+# tunel = 10
+# 
+# x = trainControl(method = "repeatedcv",
+#                  number = numbers,
+#                  repeats = repeats,
+#                  classProbs = TRUE,
+#                  summaryFunction = twoClassSummary)
+# data.train.knn <- data.train.lda
+# levels(data.train.knn$Dependent) <- c("f", "s")
+# model1 <- train(Dependent~. , data = data.train.knn, method = "knn",
+#                preProcess = c("center","scale"),
+#                trControl = x,
+#                metric = "ROC",
+#                tuneLength = tunel)
+# 
+# # Summary of model
+# model1
+# plot(model1)
+# 
+# # Validation
+# valid_pred <- predict(model1,test_new, type = "prob")
+# table(valid_pred$f)
+# round(valid_pred$f)
+# length(test_new)
+# # Confusion matrix 
+# confusionMatrix(as.factor(round(valid_pred$s)),
+#                 as.factor(test_new$Dependent))
+# 
 
+# todo: interpret results
+``` 
 
 ## Model Building
 
 ```{r}
 # fitting stepwise binary logistic regression with logit link function
-mod<-step(glm(Dependent~., family = binomial(link=logit),data = train_final))
-# model summary
-summary(mod)
+mod1 <- step(glm(Dependent~., family = binomial(link=logit),data = train1))
 
-# final logistic regression model
-model<-glm(formula = Dependent ~ Company_competitor_count +
-             Company_1st_investment_time + Founders_Data_Science_skills_score +
-             Company_big_data + Founders_publications + Founders_global_exposure,
-           family = binomial(link = logit), data = train_final)
-# model summary
-summary(model)
+# from randomForest
+mod2 <- step(glm(Dependent~., family = binomial(link=logit),data = train2))
 
+# from mars
+mod3 <- step(glm(Dependent~., family = binomial(link=logit),data = train3))
+
+summary(mod1)
+summary(mod2)
+summary(mod3)
+# todo: conf.m for all of them
+
+
+
+# ????
 # odds ratios and 95% CI
 exp(cbind(OR = coef(model), confint(model)))
 
