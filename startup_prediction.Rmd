@@ -89,22 +89,7 @@ merged <- result$merged
 head(merged)
 my.names <- result$my.names
 
-# todo: what to do with categorical var? change to numbers or inlude in model as set of dummies
-```
-
-```{r}
-# recoding ordinal variables
-# library(plyr)
-# merged$employee_count_code<-as.numeric(revalue(merged$Founders_previous_company_employee_count,
-# c("Small"=1, "Medium"=2, "Large"=3)))
-
-# recoding with R built-in functions, alternative
-# d$employee_count_code[d$Founders_previous_company_employee_count== "Small"] <- 1
-# d$employee_count_code[d$Founders_previous_company_employee_count== "Medium"] <- 2
-# d$employee_count_code[d$Founders_previous_company_employee_count== "Large"] <- 3
-
-# removing original variable from data frame
-# merged$Founders_previous_company_employee_count = NULL
+# todo: categorize factor variables
 ```
 
 ## Making Your own test data
@@ -155,11 +140,11 @@ test_new <- splitted$test_new
 ## Graphics
 
 ```{r}
-# todo: more graphics!!
+# todo: insert more graphics
 library(ggvis)
 
 # Iris scatter plot
-train %>% ggvis(~Company_senior_team_count, ~Founders_skills_score, fill = ~Dependent) %>% layer_points()
+train %>% ggvis(~Founders_skills_score, ~Company_senior_team_count, fill = ~Dependent) %>% layer_points()
 ```
 
 
@@ -167,6 +152,7 @@ train %>% ggvis(~Company_senior_team_count, ~Founders_skills_score, fill = ~Depe
 
 ### using information value
 First, we try to select some important variables using information value method. We will remove CAX_id column so it will not influence our results as only dependent and independent variables should be included in data frame
+Information Value for logistic regression is analogous to correlation for linear regression. It tells us how well an independent variable is able to distinguish two categories of dependent variables
 ```{r}
 # install.packages("devtools")
 library(devtools)
@@ -189,7 +175,7 @@ train1 <- cbind(Dependent,x_train)
 ```
 
 ### using randomForest
-Another methods for variables selection are randomForest and variable importance from caret package
+Another methods for variables selection are randomForest and variable importance from caret package. Random Forest is one of the most popular classification algoritms. Our goal is to pick up some relevant features that will classify our Dependent variable well
 ```{r}
 # generate summary
 fit_glm=glm(Dependent~.,train_new,family = "binomial")
@@ -219,7 +205,7 @@ train2 <- cbind(Dependent, train_new[,var2[!var2 %in% "Company_business_modelB2C
 ```
 
 ### using Mars
-
+MARS is another way to pick up variables for our regression. It implements variable importance based on Generalized cross validation (GCV), number of subset models the variable occurs (nsubsets) and residual sum of squares (RSS).
 ```{r}
 library(earth)
 mars.model <- earth(Dependent ~., data=train_new)
@@ -236,6 +222,7 @@ plot(x=ev,
 
 # todo: interpret results
 var3 <- rownames(ev)
+var3
 var3[var3 == "Company_business_modelB2C"] <- "Company_business_model"
 var3[var3 == "Founders_skills_score-unused"] <- "Founders_skills_score"
 train3 <- cbind(Dependent, train_new[, var3])
@@ -284,11 +271,10 @@ library(caret)
 model_knn <- train(train_new[, result$my.cnt.names], as.factor(train_new[, 1]), method='knn')
 predictions<-predict(object=model_knn,test_new[,result$my.cnt.names])
 
-# Evaluate the predictions
-table(predictions)
-
 # Confusion matrix 
 confusionMatrix(predictions,as.factor(test_new$Dependent))
+
+# todo: interpret results
 
 
 # takoe
@@ -320,12 +306,10 @@ confusionMatrix(predictions,as.factor(test_new$Dependent))
 # table(valid_pred$f)
 # round(valid_pred$f)
 # length(test_new)
-# # Confusion matrix 
+# # Confusion matrix
 # confusionMatrix(as.factor(round(valid_pred$s)),
 #                 as.factor(test_new$Dependent))
-# 
 
-# todo: interpret results
 ``` 
 
 ## Model Building
@@ -343,9 +327,17 @@ mod3 <- step(glm(Dependent~., family = binomial(link=logit),data = train3))
 summary(mod1)
 summary(mod2)
 summary(mod3)
-# todo: conf.m for all of them
+# confusion
+c.m1 <- confusionMatrix(as.factor(round(mod1$fitted.values)),
+                        as.factor(train1$Dependent))
+c.m2 <- confusionMatrix(as.factor(round(mod2$fitted.values)),
+                        as.factor(train2$Dependent))
+c.m3 <- confusionMatrix(as.factor(round(mod3$fitted.values)),
+                        as.factor(train3$Dependent))
 
-
+c.m1
+c.m2
+c.m3
 
 # ????
 # odds ratios and 95% CI
@@ -353,14 +345,14 @@ exp(cbind(OR = coef(model), confint(model)))
 
 # model fit (Hosmer and Lemeshow goodness of fit (GOF) test)
 library(ResourceSelection)
-hoslem.test(train_new$Dependent,model$fitted.values, g=10)
+hoslem.test(train_new$Dependent,mod1$fitted.values, g=10)
 ```
 
 ## Predicting test score and model evaluation
 
 ```{r}
 # Prediction on test set
-pred_prob<-predict (model, newdata=test_new, type="response")
+pred_prob<-predict (mod2, newdata=test_new, type="response")
 # model accuracy measures
 library(ROCR)
 pred <- prediction (pred_prob, test_new$Dependent)
@@ -388,7 +380,7 @@ library(SDMTools)
 confusion.matrix(test_new$Dependent, pred_prob, threshold = 0.42)
 
 # Prediction on test set of CAX
-pred_CAX<- predict(model, newdata=test, type="response")
+pred_CAX<- predict(mod2, newdata=test, type="response")
 submit_CAX<- cbind(test$CAX_ID,pred_CAX)
 colnames(submit_CAX)<- c("CAX_ID", "Dependent")
 write.csv(submit_CAX,"Predictions.csv",row.names=F)
