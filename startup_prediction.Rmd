@@ -237,6 +237,7 @@ var3[var3 == "Company_business_modelB2C"] <- "Company_business_model"
 var3[var3 == "Founders_skills_score-unused"] <- "Founders_skills_score"
 var2[var2 == "Founders_publicationsNone"] <- "Founders_publications"
 var3[var3 == "Founder_educationMasters"] <- "Founder_education"
+var3[var3 == "Company_crowdfunding-unused"] <- "Company_crowdfunding"
 
 #final df from mars
 train.mars <- cbind(Dependent, train_new[, var3])
@@ -253,15 +254,30 @@ train_new
 ```
 
 ```{r}
-#load library
+# Get rid of Cax_Id so it does not spoil the data
+test_n <- subset(test_new, select = -CAX_ID)
+test_n
+
+
 library(dummies)
+
 
 #create a dummy data frame and divide the new data
 pca.train <- dummy.data.frame(subset(train_new, select = -Dependent), names = result$my.fct.names)
-pca.test <- dummy.data.frame(subset(test_new, select = -Dependent), names = result$my.fct.names)
+pca.test <- dummy.data.frame(subset(test_n, select = -Dependent), names = result$my.fct.names)
 
-#principal component analysis
+# now we have 75 variables including dummies
+pca.train
+pca.test
+
+# here we select only those columns for training which we have in test, it it the pre-requirement for the model
+pca.train <- subset(pca.train, select=c(colnames(pca.test)))
+# now train has the same numer of columns as test
+pca.train
+
+# principal component analysis
 prin_comp <- prcomp(pca.train, scale. = T)
+# take a brief look at top components and variables rotation matrix
 prin_comp$rotation[1:5, 1:4]
 
 library(ggbiplot)
@@ -269,98 +285,36 @@ library(ggbiplot)
 ggbiplot(prin_comp)
 #plot 1st and 2nd principal components grouping by Industry Exposure of Founders
 ggbiplot(prin_comp, groups=train_new$Founders_Industry_exposure, scale = 0, ellipse=TRUE)
+
+#compute standard deviation of each principal component
+std_dev <- prin_comp$sdev
+
+#compute variance
+pr_var <- std_dev^2
+
+#proportion of variance explained
+prop_varex <- pr_var/sum(pr_var)
+prop_varex[1:20]
+
 ```
+
+First principal component explains 7.3% variance. Second component explains 5.1% variance. Third component explains 4.4% variance and so on. So, how do we decide how many components should we select for modeling stage?
 
 ```{r}
-cnt.pca <- prcomp(train_new[c(
-                        'Company_raising_fund', 
-                        'Company_avg_investment_time', 
-                        'Company_cofounders_count', 
-                        'Company_senior_team_count', 
-                        'Company_repeat_investors_count', 
-                        'Founder_university_quality',
-                        'Founders_Popularity', 
-                        'Founders_fortune1000_company_score',
-                        'Founders_skills_score', 
-                        'Company_competitor_count', 
-                        'Company_1st_investment_time',
-                        'Company_investor_count_seed',
-                        'Company_investor_count_Angel_VC', 
-                        'Company_advisors_count',
-                        'Company_analytics_score',
-                        'Company_competitor_count',
-                        'Founders_Operations_skills_score',
-                        'Founders_Leadership_skills_score',
-                        'Founders_Marketing_skills_score',
-                        'Founders_Sales_skills_score',
-                        'Founders_Data_Science_skills_score',
-                        'Founders_Entrepreneurship_skills_score',
-                        'Founders_Domain_skills_score',
-                        'Founders_Engineering_skills_score',
-                        'Founders_Business_Strategy_skills_score',
-                        'Founders_Product_Management_skills_score'
-                        )],
-                  center = TRUE,scale. = TRUE)
-
-summary(cnt.pca)
-
-
-library(ggbiplot)
-#plot PCA with vectors
-ggbiplot(cnt.pca)
-#plot 1st and 2nd principal components grouping by Industry Exposure of Founders
-ggbiplot(cnt.pca, groups=train_new$Founders_Industry_exposure, ellipse=TRUE)
+#scree plot
+plot(prop_varex, xlab = "Principal Component",
+             ylab = "Proportion of Variance Explained",
+             type = "b")
 ```
-As we can see, there is no 
 
-### PCA with selected features
+The plot above shows that ~ 60 components explain more than 98% variance in the data set. In order words, using PCA we have reduced 75 predictors to 60 without compromising on explained variance. This is the power of PCA. Let’s do a confirmation check, by plotting a cumulative variance plot. This will give us a clear picture of number of components.
 ```{r}
-head(train_new)
+#cumulative scree plot
+plot(cumsum(prop_varex), xlab = "Principal Component",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b")
 ```
-
-Create a dataframe with continuous variables only (we take different skills scores) to perform Principal Component Analysis and try to reduce number of variables.
-```{r}
-cnt_df <- train_new[c('Founders_Marketing_skills_score',
-                      'Founders_Sales_skills_score',
-                      'Company_analytics_score', 'Founders_Data_Science_skills_score',
-                      'Founders_Entrepreneurship_skills_score',
-                      'Founders_Domain_skills_score', 'Founders_Engineering_skills_score',
-                      'Founders_Business_Strategy_skills_score',
-                      'Founders_Product_Management_skills_score')]
-
-library(psych)
-describe(cnt_df)
-```
-
-Principal Component Analysis:
-```{r}
-cnt.pca <- prcomp(train_new[c('Founders_Marketing_skills_score',
-                      'Founders_Sales_skills_score',
-                      'Company_analytics_score', 'Founders_Data_Science_skills_score',
-                      'Founders_Entrepreneurship_skills_score',
-                      'Founders_Domain_skills_score', 'Founders_Engineering_skills_score',
-                      'Founders_Business_Strategy_skills_score',
-                      'Founders_Product_Management_skills_score')],
-                  center = TRUE,scale. = TRUE)
-
-summary(cnt.pca)
-```
-Plot PCA.
-```{r}
-library(ggbiplot)
-
-
-ggbiplot(cnt.pca,  groups=train_new$Founders_Industry_exposure, ellipse=TRUE)
-```
-Let's look at groups 2 and 3.
-```{r}
-
-# ggbiplot(cnt.pca, groups=train_final$Founders_profile_similarity, ellipse=TRUE)
-
-# ggbiplot(cnt.pca, groups=train_final$Founder_highest_degree_type, ellipse=TRUE)
-
-ggbiplot(cnt.pca, choices=c(2,3), groups=train_new$Founders_Industry_exposure, ellipse=TRUE)
-```
+This plot shows that 60 components results in variance close to ~ 98%. Therefore, in this case, we’ll select number of components as 60 [PC1 to PC60] and proceed to the modeling stage. This completes the steps to implement PCA on train data. For modeling, we’ll use these 60 components as predictor variables. See this later in Notebook, after the SVM part.
 
 
 ## LDA
@@ -469,38 +423,13 @@ c.m1
 c.m2
 c.m3
 
-# ????
-# odds ratios and 95% CI
-exp(cbind(OR = coef(model), confint(model)))
 
 # model fit (Hosmer and Lemeshow goodness of fit (GOF) test)
 library(ResourceSelection)
 hoslem.test(train_new$Dependent,mod.iv$fitted.values, g=10)
 ```
 
-## Final Modelling
-### Logit model
-```{r}
-# # fitting stepwise binary logistic regression with logit link function
-# mod<-step(glm(Dependent~., family = binomial(link=logit),data = train_new))
-# # model summary
-# summary(mod)
-# 
-# # final logistic regression model
-# model.log <-glm(formula = Dependent ~ Company_competitor_count +
-#              Company_1st_investment_time + Founders_Data_Science_skills_score +
-#              Founders_publications + Founders_Industry_exposure,
-#            family = binomial(link = logit), data = train_new)
-# # model summary
-# summary(model.log)
-# 
-# # odds ratios and 95% CI
-# exp(cbind(OR = coef(model), confint(model.log)))
-# 
-# # model fit (Hosmer and Lemeshow goodness of fit (GOF) test)
-# library(ResourceSelection)
-# hoslem.test(train_new$Dependent,model.log$fitted.values, g=10)
-```
+## Modeling
 
 ## Support Verctor Machine
 We take the dataframe with the features selected using Information Value algorithm and use these selected features to build an SVM model for predicting binary outcome.
@@ -528,6 +457,35 @@ confusionMatrix(as.factor(train.iv$Dependent), predict(model.svm))
 plot(model.svm, train_new, Founders_Data_Science_skills_score ~ Company_avg_investment_time,
      svSymbol = 1, dataSymbol = 2, symbolPalette = rainbow(4),
 color.palette = terrain.colors)
+```
+
+
+### SVM on principal components
+```{r}
+#add a training set with principal components
+train.data <- data.frame(Dependent = train_new$Dependent, prin_comp$x)
+
+#we are interested in first 60 PCAs
+train.data <- train.data[,1:61]
+
+#transform test into PCA
+test.data <- predict(prin_comp, newdata = pca.test)
+test.data <- as.data.frame(test.data)
+
+#select the first 60 components
+test.data <- test.data[,1:61]
+
+
+library('e1071')
+
+# building SVM model from the variables obtained after feature selection using PCA.
+model.svm.pca <- svm(Dependent ~ .,data = train.data, probability = TRUE, type='nu-classification')
+
+#make prediction on test data
+svm.prediction <- predict(model.svm.pca, test.data, type = "class")
+
+
+confusionMatrix(as.factor(test_new$Dependent), svm.prediction)
 ```
 
 
@@ -575,10 +533,8 @@ ggplot(perf2, aes(Probability, value, colour = variable)) +
 geom_line()+ theme_bw()
 
 # model accuracy - Confusion Matrix
-library(caret)
-pred_prob
+library(SDMTools)
 confusion.matrix(test_new$Dependent, as.numeric(as.character(pred_prob)), threshold = 0.42)
-
 
 ```
 
@@ -595,10 +551,6 @@ x.train_new <- subset(train_new, select = -Dependent)
 # Prediction on test set
 pred_prob<-predict(model.svm, newdata=x.train_new, type="response")
 
-pred_prob
-
-class(train_new$Dependent)
-
 # model accuracy measures
 library(ROCR)
 
@@ -610,28 +562,25 @@ performance(pred, 'auc')
 # creating ROC curve
 roc <- performance (pred,"tpr","fpr")
 plot(roc)
-
-# create data frame of values
-perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
-colnames(perf) <-c("Probability","FPR","TPR")
-
-# removing infinity value from data frame
-perf <-perf[-1,]
-
-# reshape the data frame
-library(reshape)
-perf2<- melt(perf, measure.vars = c("FPR", "TPR"))
-
-# plotting FPR, TPR on y axis and cut-off probability on x axis
-library(ggplot2)
-ggplot(perf2, aes(Probability, value, colour = variable)) +
-geom_line()+ theme_bw()
+# 
+# # create data frame of values
+# perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
+# colnames(perf) <-c("Probability","FPR","TPR")
+# 
+# # removing infinity value from data frame
+# perf <-perf[-1,]
+# 
+# # reshape the data frame
+# library(reshape)
+# perf2<- melt(perf, measure.vars = c("FPR", "TPR"))
+# 
+# # plotting FPR, TPR on y axis and cut-off probability on x axis
+# library(ggplot2)
+# ggplot(perf2, aes(Probability, value, colour = variable)) +
+# geom_line()+ theme_bw()
 
 # model accuracy - Confusion Matrix
-library(caret)
-pred_prob
 confusion.matrix(train_new$Dependent, as.numeric(as.character(pred_prob)), threshold = 0.42)
-
 
 ```
 
@@ -642,7 +591,24 @@ confusion.matrix(train_new$Dependent, as.numeric(as.character(pred_prob)), thres
 # Prediction on test set of CAX
 test
 
-#x <- subset(test, select = -Dependent)
+x <- subset(test, select = -Dependent)
+
+###################################
+
+# for PCA model
+
+# pca.test <- dummy.data.frame(subset(test, select = -Dependent), names = result$my.fct.names)
+# 
+# #transform test into PCA
+# test.data <- predict(prin_comp, newdata = pca.test)
+# test.data <- as.data.frame(test.data)
+# 
+# #select the first 60 components
+# x <- test.data[,1:61]
+# 
+# 
+# pred_CAX <- predict(model.svm.pca, newdata=x)
+####################################
 
 pred_CAX <- predict(model.svm, newdata=x)
 
