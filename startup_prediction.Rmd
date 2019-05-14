@@ -11,6 +11,8 @@ output: html_notebook
 ### Read data
 First of all, we have to read the data and store it in appropriate variables. There are also some further transformation with it, so we add column Category and merged dataset so we will not perform the same actions twice
 ```{r}
+set.seed(500)
+
 # importing train and test data
 train <- read.csv(file="./data/CAX_Startup_Train.csv", header=TRUE,as.is=T)
 test <- read.csv(file="./data/CAX_Startup_Test.csv", header=TRUE,as.is=T)
@@ -141,9 +143,10 @@ test_new <- splitted$test_new
 
 ```{r}
 # todo: insert more graphics
+# install.packages('ggvis')
 library(ggvis)
 
-# Iris scatter plot
+# Scatter plot
 train %>% ggvis(~Founders_skills_score, ~Company_senior_team_count, fill = ~Dependent) %>% layer_points()
 ```
 
@@ -170,12 +173,14 @@ var1 <- IV[which(IV$InformationValue>0.1),]
 var1 <- c(var1, var1[which(var1$InformationValue<0.5),])
 x_train <- train_new[var1$Variable]
 Dependent <- train_new$Dependent
+
 # final df with important variables
-train1 <- cbind(Dependent,x_train)
+train.iv <- cbind(Dependent,x_train)
+as.data.frame(train.iv)
 ```
 
 ### using randomForest
-Another methods for variables selection are randomForest and variable importance from caret package. Random Forest is one of the most popular classification algoritms. Our goal is to pick up some relevant features that will classify our Dependent variable well
+Another methods for variables selection are randomForest and variable importance from caret package. Random Forest is one of the most popular classification algoritms. Our goal is to pick up some relevant features that will classify our Dependent variable well.
 ```{r}
 # generate summary
 fit_glm=glm(Dependent~.,train_new,family = "binomial")
@@ -188,6 +193,7 @@ importance1 <- varImp(fit_glm)
 #Import the random forest library and fit a model
 library(randomForest)
 fit_rf=randomForest(Dependent~., data=train_new)
+
 # Create an importance based on mean decreasing gini
 importance2 <- importance(fit_rf)
  
@@ -198,10 +204,14 @@ varImpPlot(fit_rf)
 # 2.5 as a key point before sharp decline (top-7 variables)
 var2 <- rownames(importance1)[which(importance1$Overall > 2.5)]
 var2[var2 == "Founders_publicationsNone"] <- "Founders_publications"
+var2[var2 == "Company_LocationUSA"] <- "Company_Location"
 var2[var2 == "Founder_educationMasters"] <- "Founder_education"
+var2[var2 == "Company_business_modelB2C"] <- "Company_business_model"
 var2 <- c(var2, rownames(importance2)[which(importance2 > 2.5)])
+
 # final df from rf
-train2 <- cbind(Dependent, train_new[,var2[!var2 %in% "Company_business_modelB2C"]])
+train.varimp <- cbind(Dependent, train_new[,var2])
+as.data.frame(train.varimp)
 ```
 
 ### using Mars
@@ -222,14 +232,135 @@ plot(x=ev,
 
 # todo: interpret results
 var3 <- rownames(ev)
-var3
+
 var3[var3 == "Company_business_modelB2C"] <- "Company_business_model"
 var3[var3 == "Founders_skills_score-unused"] <- "Founders_skills_score"
-train3 <- cbind(Dependent, train_new[, var3])
+var2[var2 == "Founders_publicationsNone"] <- "Founders_publications"
+var3[var3 == "Founder_educationMasters"] <- "Founder_education"
+
+#final df from mars
+train.mars <- cbind(Dependent, train_new[, var3])
+as.data.frame(train.mars)
 ```
 
-
 ## PCA
+
+
+### PCA with all data
+Let's first try to perform PCA using all the numerical variables we have, to see whetther our data could be spread into components.
+```{r}
+train_new
+```
+
+```{r}
+#load library
+library(dummies)
+
+#create a dummy data frame and divide the new data
+pca.train <- dummy.data.frame(subset(train_new, select = -Dependent), names = result$my.fct.names)
+pca.test <- dummy.data.frame(subset(test_new, select = -Dependent), names = result$my.fct.names)
+
+#principal component analysis
+prin_comp <- prcomp(pca.train, scale. = T)
+prin_comp$rotation[1:5, 1:4]
+
+library(ggbiplot)
+#plot PCA with vectors
+ggbiplot(prin_comp)
+#plot 1st and 2nd principal components grouping by Industry Exposure of Founders
+ggbiplot(prin_comp, groups=train_new$Founders_Industry_exposure, scale = 0, ellipse=TRUE)
+```
+
+```{r}
+cnt.pca <- prcomp(train_new[c(
+                        'Company_raising_fund', 
+                        'Company_avg_investment_time', 
+                        'Company_cofounders_count', 
+                        'Company_senior_team_count', 
+                        'Company_repeat_investors_count', 
+                        'Founder_university_quality',
+                        'Founders_Popularity', 
+                        'Founders_fortune1000_company_score',
+                        'Founders_skills_score', 
+                        'Company_competitor_count', 
+                        'Company_1st_investment_time',
+                        'Company_investor_count_seed',
+                        'Company_investor_count_Angel_VC', 
+                        'Company_advisors_count',
+                        'Company_analytics_score',
+                        'Company_competitor_count',
+                        'Founders_Operations_skills_score',
+                        'Founders_Leadership_skills_score',
+                        'Founders_Marketing_skills_score',
+                        'Founders_Sales_skills_score',
+                        'Founders_Data_Science_skills_score',
+                        'Founders_Entrepreneurship_skills_score',
+                        'Founders_Domain_skills_score',
+                        'Founders_Engineering_skills_score',
+                        'Founders_Business_Strategy_skills_score',
+                        'Founders_Product_Management_skills_score'
+                        )],
+                  center = TRUE,scale. = TRUE)
+
+summary(cnt.pca)
+
+
+library(ggbiplot)
+#plot PCA with vectors
+ggbiplot(cnt.pca)
+#plot 1st and 2nd principal components grouping by Industry Exposure of Founders
+ggbiplot(cnt.pca, groups=train_new$Founders_Industry_exposure, ellipse=TRUE)
+```
+As we can see, there is no 
+
+### PCA with selected features
+```{r}
+head(train_new)
+```
+
+Create a dataframe with continuous variables only (we take different skills scores) to perform Principal Component Analysis and try to reduce number of variables.
+```{r}
+cnt_df <- train_new[c('Founders_Marketing_skills_score',
+                      'Founders_Sales_skills_score',
+                      'Company_analytics_score', 'Founders_Data_Science_skills_score',
+                      'Founders_Entrepreneurship_skills_score',
+                      'Founders_Domain_skills_score', 'Founders_Engineering_skills_score',
+                      'Founders_Business_Strategy_skills_score',
+                      'Founders_Product_Management_skills_score')]
+
+library(psych)
+describe(cnt_df)
+```
+
+Principal Component Analysis:
+```{r}
+cnt.pca <- prcomp(train_new[c('Founders_Marketing_skills_score',
+                      'Founders_Sales_skills_score',
+                      'Company_analytics_score', 'Founders_Data_Science_skills_score',
+                      'Founders_Entrepreneurship_skills_score',
+                      'Founders_Domain_skills_score', 'Founders_Engineering_skills_score',
+                      'Founders_Business_Strategy_skills_score',
+                      'Founders_Product_Management_skills_score')],
+                  center = TRUE,scale. = TRUE)
+
+summary(cnt.pca)
+```
+Plot PCA.
+```{r}
+library(ggbiplot)
+
+
+ggbiplot(cnt.pca,  groups=train_new$Founders_Industry_exposure, ellipse=TRUE)
+```
+Let's look at groups 2 and 3.
+```{r}
+
+# ggbiplot(cnt.pca, groups=train_final$Founders_profile_similarity, ellipse=TRUE)
+
+# ggbiplot(cnt.pca, groups=train_final$Founder_highest_degree_type, ellipse=TRUE)
+
+ggbiplot(cnt.pca, choices=c(2,3), groups=train_new$Founders_Industry_exposure, ellipse=TRUE)
+```
 
 
 ## LDA
@@ -275,8 +406,6 @@ predictions<-predict(object=model_knn,test_new[,result$my.cnt.names])
 confusionMatrix(predictions,as.factor(test_new$Dependent))
 
 # todo: interpret results
-
-
 # takoe
 # sec way
 # Setting up train controls
@@ -313,27 +442,28 @@ confusionMatrix(predictions,as.factor(test_new$Dependent))
 ``` 
 
 ## Model Building
-
+We build three logistic regression models out of components that we obtained using differend methods for feature selection. By doing this, we'll able to compare these different approaches.
 ```{r}
-# fitting stepwise binary logistic regression with logit link function
-mod1 <- step(glm(Dependent~., family = binomial(link=logit),data = train1))
+# fitting stepwise binary logistic regression with logit link function, using features selected with Information value
+mod.iv <- step(glm(Dependent~., family = binomial(link=logit),data = train.iv))
+
 
 # from randomForest
-mod2 <- step(glm(Dependent~., family = binomial(link=logit),data = train2))
+mod.varimp <- step(glm(Dependent~., family = binomial(link=logit),data = train.varimp))
 
 # from mars
-mod3 <- step(glm(Dependent~., family = binomial(link=logit),data = train3))
+mod.mars <- step(glm(Dependent~., family = binomial(link=logit),data = train.mars))
 
-summary(mod1)
-summary(mod2)
-summary(mod3)
+summary(mod.iv)
+summary(mod.varimp)
+summary(mod.mars)
 # confusion
-c.m1 <- confusionMatrix(as.factor(round(mod1$fitted.values)),
-                        as.factor(train1$Dependent))
-c.m2 <- confusionMatrix(as.factor(round(mod2$fitted.values)),
-                        as.factor(train2$Dependent))
-c.m3 <- confusionMatrix(as.factor(round(mod3$fitted.values)),
-                        as.factor(train3$Dependent))
+c.m1 <- confusionMatrix(as.factor(round(mod.iv$fitted.values)),
+                        as.factor(train.iv$Dependent))
+c.m2 <- confusionMatrix(as.factor(round(mod.varimp$fitted.values)),
+                        as.factor(train.varimp$Dependent))
+c.m3 <- confusionMatrix(as.factor(round(mod.mars$fitted.values)),
+                        as.factor(train.mars$Dependent))
 
 c.m1
 c.m2
@@ -345,17 +475,83 @@ exp(cbind(OR = coef(model), confint(model)))
 
 # model fit (Hosmer and Lemeshow goodness of fit (GOF) test)
 library(ResourceSelection)
-hoslem.test(train_new$Dependent,mod1$fitted.values, g=10)
+hoslem.test(train_new$Dependent,mod.iv$fitted.values, g=10)
 ```
+
+## Final Modelling
+### Logit model
+```{r}
+# # fitting stepwise binary logistic regression with logit link function
+# mod<-step(glm(Dependent~., family = binomial(link=logit),data = train_new))
+# # model summary
+# summary(mod)
+# 
+# # final logistic regression model
+# model.log <-glm(formula = Dependent ~ Company_competitor_count +
+#              Company_1st_investment_time + Founders_Data_Science_skills_score +
+#              Founders_publications + Founders_Industry_exposure,
+#            family = binomial(link = logit), data = train_new)
+# # model summary
+# summary(model.log)
+# 
+# # odds ratios and 95% CI
+# exp(cbind(OR = coef(model), confint(model.log)))
+# 
+# # model fit (Hosmer and Lemeshow goodness of fit (GOF) test)
+# library(ResourceSelection)
+# hoslem.test(train_new$Dependent,model.log$fitted.values, g=10)
+```
+
+## Support Verctor Machine
+We take the dataframe with the features selected using Information Value algorithm and use these selected features to build an SVM model for predicting binary outcome.
+```{r}
+train.iv
+```
+
+
+```{r}
+library('e1071')
+
+# building SVM model from the variables obtained after feature selection using IV.
+
+model.svm <- svm(Dependent ~  .,
+              data = train.iv, probability = TRUE, type='nu-classification')
+
+
+print(model.svm)
+
+library(caret)
+confusionMatrix(as.factor(train.iv$Dependent), predict(model.svm))
+
+
+#plot model
+plot(model.svm, train_new, Founders_Data_Science_skills_score ~ Company_avg_investment_time,
+     svSymbol = 1, dataSymbol = 2, symbolPalette = rainbow(4),
+color.palette = terrain.colors)
+```
+
 
 ## Predicting test score and model evaluation
 
 ```{r}
+# class(test_new$Dependent)
+
+# Prediction on test set of CAX
+x.test_new <- subset(test_new, select = -Dependent)
+
 # Prediction on test set
-pred_prob<-predict (mod2, newdata=test_new, type="response")
+pred_prob<-predict(model.svm, newdata=x.test_new, type="response")
+
+pred_prob
+
+class(test_new$Dependent)
+
 # model accuracy measures
 library(ROCR)
-pred <- prediction (pred_prob, test_new$Dependent)
+
+pred <- prediction (as.numeric(as.character(pred_prob)), test_new$Dependent)
+
+
 # Area under the curve
 performance(pred, 'auc')
 # creating ROC curve
@@ -365,23 +561,95 @@ plot(roc)
 # create data frame of values
 perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
 colnames(perf) <-c("Probability","FPR","TPR")
+
 # removing infinity value from data frame
 perf <-perf[-1,]
+
 # reshape the data frame
 library(reshape)
 perf2<- melt(perf, measure.vars = c("FPR", "TPR"))
+
 # plotting FPR, TPR on y axis and cut-off probability on x axis
 library(ggplot2)
 ggplot(perf2, aes(Probability, value, colour = variable)) +
 geom_line()+ theme_bw()
 
 # model accuracy - Confusion Matrix
-library(SDMTools)
-confusion.matrix(test_new$Dependent, pred_prob, threshold = 0.42)
+library(caret)
+pred_prob
+confusion.matrix(test_new$Dependent, as.numeric(as.character(pred_prob)), threshold = 0.42)
+
+
+```
+
+
+
+
+
+```{r}
+# class(test_new$Dependent)
 
 # Prediction on test set of CAX
-pred_CAX<- predict(mod2, newdata=test, type="response")
+x.train_new <- subset(train_new, select = -Dependent)
+
+# Prediction on test set
+pred_prob<-predict(model.svm, newdata=x.train_new, type="response")
+
+pred_prob
+
+class(train_new$Dependent)
+
+# model accuracy measures
+library(ROCR)
+
+pred <- prediction (as.numeric(as.character(pred_prob)), train_new$Dependent)
+
+
+# Area under the curve
+performance(pred, 'auc')
+# creating ROC curve
+roc <- performance (pred,"tpr","fpr")
+plot(roc)
+
+# create data frame of values
+perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
+colnames(perf) <-c("Probability","FPR","TPR")
+
+# removing infinity value from data frame
+perf <-perf[-1,]
+
+# reshape the data frame
+library(reshape)
+perf2<- melt(perf, measure.vars = c("FPR", "TPR"))
+
+# plotting FPR, TPR on y axis and cut-off probability on x axis
+library(ggplot2)
+ggplot(perf2, aes(Probability, value, colour = variable)) +
+geom_line()+ theme_bw()
+
+# model accuracy - Confusion Matrix
+library(caret)
+pred_prob
+confusion.matrix(train_new$Dependent, as.numeric(as.character(pred_prob)), threshold = 0.42)
+
+
+```
+
+
+
+
+```{r}
+# Prediction on test set of CAX
+test
+
+#x <- subset(test, select = -Dependent)
+
+pred_CAX <- predict(model.svm, newdata=x)
+
+pred_CAX
+
 submit_CAX<- cbind(test$CAX_ID,pred_CAX)
+
 colnames(submit_CAX)<- c("CAX_ID", "Dependent")
 write.csv(submit_CAX,"Predictions.csv",row.names=F)
 ```
