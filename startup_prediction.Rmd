@@ -184,6 +184,8 @@ library(dummies)
 # now that's all independent variables
 pca.train <- dummy.data.frame(subset(train_new, select = -Dependent), names = result$my.fct.names)
 pca.test <- dummy.data.frame(subset(test_new, select = -Dependent), names = result$my.fct.names)
+pca.test.final <- dummy.data.frame(subset(test, select = -Dependent), names = result$my.fct.names)
+# names(pca.test.final)[!names(pca.test.final) %in% names(pca.test)] 
 
 # now we have 75 variables including dummies
 pca.train
@@ -191,15 +193,19 @@ pca.test
 
 # here we select only those columns for training which we have in test, it it the pre-requirement for the model
 pca.train <- subset(pca.train, select=c(colnames(pca.test)))
+pca.test.final <- subset(pca.test.final, select=c(colnames(pca.test), "CAX_ID"))
 # now train has the same numer of columns as test
 pca.train
 
 data.train.all <- cbind(pca.train, as.factor(train_new$Dependent))
 data.test.all <- cbind(pca.test, as.factor(test_new$Dependent))
+data.test.final <- cbind(pca.test.final, as.factor(test$Dependent))
 names(data.train.all)[75] <- "Dependent"
 names(data.test.all)[75] <- "Dependent"
+names(data.test.final)[76] <- "Dependent"
 levels(data.train.all$Dependent) <- c("fail", "success")
 levels(data.test.all$Dependent) <- c("fail", "success")
+levels(data.test.final$Dependent) <- c("fail", "success")
 ```
 ### using information value
 First, we try to select some important variables using information value method. We will remove CAX_id column so it will not influence our results as only dependent and independent variables should be included in data frame
@@ -442,10 +448,11 @@ confusion.m.iv <- confusionMatrix(iv.pred, data.test.all$Dependent)
 confusion.m.iv
 qplot(data.test.all$Dependent,
       iv.pred,
-      colour= as.numeric(data.test.all$Dependent)-1, geom = c("boxplot", "jitter"), 
-      main = "predicted vs. observed using LDA", 
+      colour= as.numeric(data.test.all$Dependent)-1, geom = c("boxplot",
+                                                              "jitter"), 
+      main = "predicted vs. observed using IV", 
       xlab = "Observations", ylab = "Predictions") + 
-  scale_color_gradientn(colors = c("pink", "black"))
+  scale_color_gradientn(colors = c("red", "black"))
 
 #confusion matrix for varimp
 confusion.m.varimp <- confusionMatrix(varimp.pred, data.test.all$Dependent)
@@ -453,9 +460,9 @@ confusion.m.varimp
 qplot(data.test.all$Dependent,
       varimp.pred,
       colour= as.numeric(data.test.all$Dependent)-1, geom = c("boxplot", "jitter"), 
-      main = "predicted vs. observed using LDA", 
+      main = "predicted vs. observed using RandForest", 
       xlab = "Observations", ylab = "Predictions") + 
-  scale_color_gradientn(colors = c("red", "black"))
+  scale_color_gradientn(colors = c("blue", "black"))
 
 
 
@@ -487,7 +494,7 @@ confusionMatrix(as.factor(train.iv$Dependent), predict(model.svm))
 
 
 #plot model
-plot(model.svm, train_new, Founders_Data_Science_skills_score ~ Company_avg_investment_time,
+plot(model.svm, data.train.all, Founders_Data_Science_skills_score ~ Company_avg_investment_time,
      svSymbol = 1, dataSymbol = 2, symbolPalette = rainbow(4),
 color.palette = terrain.colors)
 ```
@@ -523,108 +530,12 @@ confusionMatrix(as.factor(test_new$Dependent), svm.prediction)
 
 
 ## Predicting test score and model evaluation
-
-```{r}
-# class(test_new$Dependent)
-
-# Prediction on test set of CAX
-x.test_new <- subset(test_new, select = -Dependent)
-
-# Prediction on test set
-pred_prob<-predict(model.svm, newdata=x.test_new, type="response")
-
-pred_prob
-
-class(test_new$Dependent)
-
-# model accuracy measures
-library(ROCR)
-
-pred <- prediction (as.numeric(as.character(pred_prob)), test_new$Dependent)
-
-
-# Area under the curve
-performance(pred, 'auc')
-# creating ROC curve
-roc <- performance (pred,"tpr","fpr")
-plot(roc)
-
-# create data frame of values
-perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
-colnames(perf) <-c("Probability","FPR","TPR")
-
-# removing infinity value from data frame
-perf <-perf[-1,]
-
-# reshape the data frame
-library(reshape)
-perf2<- melt(perf, measure.vars = c("FPR", "TPR"))
-
-# plotting FPR, TPR on y axis and cut-off probability on x axis
-library(ggplot2)
-ggplot(perf2, aes(Probability, value, colour = variable)) +
-geom_line()+ theme_bw()
-
-# model accuracy - Confusion Matrix
-library(SDMTools)
-confusion.matrix(test_new$Dependent, as.numeric(as.character(pred_prob)), threshold = 0.42)
-
-```
-
-
-
-
-
-```{r}
-# class(test_new$Dependent)
-
-# Prediction on test set of CAX
-x.train_new <- subset(train_new, select = -Dependent)
-
-# Prediction on test set
-pred_prob<-predict(model.svm, newdata=x.train_new, type="response")
-
-# model accuracy measures
-library(ROCR)
-
-pred <- prediction (as.numeric(as.character(pred_prob)), train_new$Dependent)
-
-# Area under the curve
-performance(pred, 'auc')
-# creating ROC curve
-roc <- performance(pred,"tpr","fpr")
-plot(roc)
-# 
-# # create data frame of values
-# perf <-as.data.frame(cbind(roc@alpha.values[[1]], roc@x.values[[1]], roc@y.values[[1]]))
-# colnames(perf) <-c("Probability","FPR","TPR")
-# 
-# # removing infinity value from data frame
-# perf <-perf[-1,]
-# 
-# # reshape the data frame
-# library(reshape)
-# perf2<- melt(perf, measure.vars = c("FPR", "TPR"))
-# 
-# # plotting FPR, TPR on y axis and cut-off probability on x axis
-# library(ggplot2)
-# ggplot(perf2, aes(Probability, value, colour = variable)) +
-# geom_line()+ theme_bw()
-
-# model accuracy - Confusion Matrix
-confusion.matrix(train_new$Dependent, as.numeric(as.character(pred_prob)), threshold = 0.42)
-
-```
-
-
 ```{r}
 # Prediction on test set of CAX
-test
-
-x <- subset(test, select = -Dependent)
 
 # for PCA model
-
+# test
+# x <- subset(test, select = -Dependent)
 # pca.test <- dummy.data.frame(subset(test, select = -Dependent), names = result$my.fct.names)
 # 
 # #transform test into PCA
@@ -636,13 +547,32 @@ x <- subset(test, select = -Dependent)
 # 
 # 
 # pred_CAX <- predict(model.svm.pca, newdata=x)
-pred_CAX <- predict(model.svm, newdata=x)
 
-pred_CAX <- predict(model.svm, newdata=x, type="response")
-pred_CAX
-submit_CAX<- cbind(test$CAX_ID, as.numeric(pred_CAX)-1)
-colnames(submit_CAX)<- c("CAX_ID", "Dependent")
-write.csv(submit_CAX,"Predictions.csv",row.names=F)
+
+iv.pred.final <- predict(object=mod.iv, newdata=data.test.final, type="response")
+iv.pred.final
+submit_iv.pred <- cbind(test$CAX_ID, round(iv.pred.final))
+colnames(submit_iv.pred)<- c("CAX_ID", "Dependent")
+write.csv(submit_iv.pred,"PredictionsIV.csv",row.names=F)
+
+
+varimp.pred.final <- predict(object=mod.varimp, newdata=data.test.final, type="response")
+varimp.pred.final
+submit_varimp.pred <- cbind(test$CAX_ID, round(varimp.pred.final))
+colnames(submit_varimp.pred)<- c("CAX_ID", "Dependent")
+write.csv(submit_varimp.pred,"PredictionsVARIMP.csv",row.names=F)
+
+
+knn.pred.final <- predict(model.knn, data.test.final, type = "prob")
+knn.pred.final$success
+submit_knn.pred <- cbind(test$CAX_ID, round(knn.pred.final$success))
+colnames(submit_knn.pred)<- c("CAX_ID", "Dependent")
+write.csv(submit_knn.pred,"PredictionsKNN.csv",row.names=F)
+
+lda_pred.final <- predict(object = lda_model, newdata = data.test.final)
+lda_pred.final$class
+submit_lda.pred <- cbind(test$CAX_ID, as.numeric(lda_pred.final$class)-1)
+colnames(submit_lda.pred)<- c("CAX_ID", "Dependent")
+write.csv(submit_lda.pred,"PredictionsLDA.csv",row.names=F)
+
 ```
-
-
